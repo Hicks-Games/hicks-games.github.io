@@ -78,10 +78,18 @@
     return count <= 6 ? 3 : 4;
   }
 
+  /* In a mystery puzzle, work out which liquid he has actually seen. Derived
+   * from the move list, so it is right after closing the app for a month. */
+  function seenUnits() {
+    if (!puzzle.hidden) return null;
+    return R.replayRevealing(puzzle.board, moves, puzzle.capacity || R.CAPACITY);
+  }
+
   /* arriving: {to, count} marks the liquid that just landed, so it can rise
    * into place instead of appearing from nowhere. */
   function render(arriving) {
     var showSymbols = settings().symbols === true;
+    var tracked = seenUnits();
     boardEl.style.setProperty('--cols', columnsFor(board.length));
     boardEl.textContent = '';
 
@@ -89,7 +97,7 @@
       var tap = document.createElement('button');
       tap.className = 'vial-tap' + (selected === index ? ' selected' : '');
       tap.type = 'button';
-      tap.setAttribute('aria-label', describe(vial, index));
+      tap.setAttribute('aria-label', describe(vial, index, tracked));
 
       var glass = document.createElement('div');
       glass.className = 'vial';
@@ -97,8 +105,16 @@
       vial.forEach(function (colour, depth) {
         var layer = document.createElement('div');
         layer.className = 'layer';
-        layer.style.background = 'var(--c' + colour + ')';
-        if (showSymbols) layer.textContent = SYMBOLS[colour % SYMBOLS.length];
+
+        var known = !tracked || tracked.seen[tracked.ids[index][depth]];
+        if (known) {
+          layer.style.background = 'var(--c' + colour + ')';
+          if (showSymbols) layer.textContent = SYMBOLS[colour % SYMBOLS.length];
+        } else {
+          layer.className += ' hidden-layer';
+          layer.textContent = '?';
+        }
+
         if (arriving && arriving.to === index &&
             depth >= vial.length - arriving.count) {
           layer.classList.add('arriving');
@@ -110,12 +126,26 @@
       tap.addEventListener('click', function () { onTap(index); });
       boardEl.appendChild(tap);
     });
+
+    paintLevel();
   }
 
-  function describe(vial, index) {
+  /* Where he is, rather than a promise about the puzzle. The guarantee that
+   * every puzzle can be finished hasn't gone anywhere — it is enforced by the
+   * generator and proved by the test page — it just no longer needs saying on
+   * screen every second of every game. */
+  function paintLevel() {
+    var level = Portal.state.progress(GAME) + 1;
+    document.getElementById('level').textContent =
+      'Level ' + level + '  ·  ' + (puzzle.name || 'Easy');
+  }
+
+  function describe(vial, index, tracked) {
     if (!vial.length) return 'Empty vial ' + (index + 1);
-    return 'Vial ' + (index + 1) + ', ' + vial.length +
-           (vial.length === 1 ? ' layer' : ' layers');
+    var label = 'Vial ' + (index + 1) + ', ' + vial.length +
+                (vial.length === 1 ? ' layer' : ' layers');
+    if (tracked) label += ', some hidden';
+    return label;
   }
 
   /* Selection changes only toggle a class, never a re-render, so the vial
@@ -173,6 +203,8 @@
   }
 
   function win() {
+    var finished = Portal.state.progress(GAME) + 1;
+    Portal.state.progress(GAME, finished);
     Portal.celebrate.show({
       message: 'You did it!',
       again: function () {

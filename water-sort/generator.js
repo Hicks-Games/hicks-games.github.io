@@ -22,13 +22,23 @@
 
   var R = Portal.watersort.rules;
 
-  /* Difficulty is how many colours are in play, and nothing else. No timers,
-   * no tricks, no scoring. */
+  /* Difficulty is how many colours are in play, and whether the puzzle keeps
+   * its colours hidden. No timers, no tricks, no scoring.
+   *
+   * `hidden` is the mystery variant he already plays elsewhere: only the
+   * liquid he has actually seen is shown, everything else is a question mark.
+   * The puzzle is still dealt and verified exactly the same way, so it is
+   * always finishable from the start — but playing blind, he can pour himself
+   * into a corner. That is what Undo and Start Over are for, and they are on
+   * screen the whole time.
+   */
   var PRESETS = {
-    gentle: { colours: 3, empties: 2 },
-    easy:   { colours: 4, empties: 2 },
-    medium: { colours: 6, empties: 2 },
-    hard:   { colours: 8, empties: 2 }
+    gentle:  { colours: 3, empties: 2, hidden: false, name: 'Gentle' },
+    easy:    { colours: 4, empties: 2, hidden: false, name: 'Easy' },
+    medium:  { colours: 6, empties: 2, hidden: false, name: 'Medium' },
+    hard:    { colours: 8, empties: 2, hidden: false, name: 'Hard' },
+    mystery: { colours: 4, empties: 2, hidden: true,  name: 'Mystery' },
+    'mystery-hard': { colours: 6, empties: 2, hidden: true, name: 'Mystery' }
   };
 
   /* A small seedable random number generator, so a puzzle that misbehaves can
@@ -107,7 +117,9 @@
         empties: empties,
         capacity: capacity,
         seed: seed,
-        difficulty: options.difficulty || 'easy'
+        difficulty: options.difficulty || 'easy',
+        hidden: options.hidden === undefined ? !!preset.hidden : !!options.hidden,
+        name: preset.name || 'Easy'
       };
     }
 

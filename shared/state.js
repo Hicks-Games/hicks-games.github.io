@@ -137,6 +137,26 @@
       } catch (err) { /* nothing to do */ }
     },
 
+    /* How many puzzles he has finished in a game. Used for the level shown on
+     * screen. It only ever goes up, and nothing is ever lost or taken away
+     * for playing badly — it is a place marker, not a score. */
+    progress: function (game, next) {
+      if (!storage) return 0;
+      var k = PREFIX + game + '.progress';
+      if (next === undefined) {
+        try {
+          var n = parseInt(storage.getItem(k), 10);
+          return isNaN(n) || n < 0 ? 0 : n;
+        } catch (err) {
+          return 0;
+        }
+      }
+      try {
+        storage.setItem(k, String(next));
+      } catch (err) { /* a lost level count is not worth interrupting a game */ }
+      return next;
+    },
+
     /* Read/write the small settings object Travis controls. Kept here so
      * every namespaced key lives in one file. */
     settings: function (next) {

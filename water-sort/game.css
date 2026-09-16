@@ -64,6 +64,16 @@
   color: rgba(0, 0, 0, 0.42);
 }
 
+/* Liquid he hasn't seen yet, in a mystery puzzle. Deliberately flat and dull
+ * so it reads as "not known yet" rather than as another colour to sort. */
+.layer.hidden-layer {
+  background: repeating-linear-gradient(
+    -45deg, #c3ccd4 0 8px, #b9c3cb 8px 16px
+  );
+  color: #5d6c78;
+  font-size: 22px;
+}
+
 /* Liquid arriving in a vial rises into place. Short on purpose: long enough
  * to show where it went, short enough that it never feels like waiting. */
 .layer.arriving { animation: pour-in 220ms ease-out; }

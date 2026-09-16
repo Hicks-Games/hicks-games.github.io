@@ -128,8 +128,55 @@
     return board;
   }
 
+  /* Replay, but also tracking which units he has actually laid eyes on.
+   *
+   * Mystery puzzles show only what he has seen: the top of each vial to start
+   * with, and whatever gets uncovered or poured as he plays. To know that, the
+   * units need identities — colours alone can't tell you whether this orange
+   * is the orange he already uncovered. So a parallel board of ids is replayed
+   * alongside the colours, moving in lockstep.
+   *
+   * It is derived entirely from the puzzle and the move list, so it survives
+   * closing the app exactly like everything else, with nothing extra saved.
+   */
+  function replayRevealing(startBoard, moveList, capacity) {
+    capacity = capacity || CAPACITY;
+
+    var nextId = 0;
+    var ids = startBoard.map(function (v) {
+      return v.map(function () { return nextId++; });
+    });
+    var board = clone(startBoard);
+    var seen = {};
+
+    function revealTops() {
+      for (var i = 0; i < ids.length; i++) {
+        if (ids[i].length) seen[ids[i][ids[i].length - 1]] = true;
+      }
+    }
+
+    revealTops();
+
+    for (var m = 0; m < moveList.length; m++) {
+      var from = moveList[m].from, to = moveList[m].to;
+      var n = pourAmount(board, from, to, capacity);
+      if (n === 0) return null;             // move list doesn't fit this puzzle
+
+      var moved = ids[from].splice(ids[from].length - n, n);
+      // Liquid in mid-air is liquid he can see.
+      for (var k = 0; k < moved.length; k++) seen[moved[k]] = true;
+      ids[to] = ids[to].concat(moved);
+
+      board = pour(board, from, to, capacity);
+      revealTops();
+    }
+
+    return { board: board, ids: ids, seen: seen };
+  }
+
   Portal.watersort = Portal.watersort || {};
   Portal.watersort.rules = {
+    replayRevealing: replayRevealing,
     CAPACITY: CAPACITY,
     top: top,
     topRun: topRun,

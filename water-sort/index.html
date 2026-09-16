@@ -11,9 +11,10 @@
 <body>
 
 <div class="screen">
-  <!-- The promise. It is on screen the whole time because the whole point is
-       that he never has to wonder whether the puzzle is winnable. -->
-  <div class="assurance">This puzzle can be solved &#10003;</div>
+  <!-- Where he is. Filled in by the game; every puzzle is still verified
+       finishable before it is dealt, that guarantee just doesn't need
+       restating on screen forever. -->
+  <div class="assurance" id="level"></div>
 
   <div class="stage">
     <div class="board" id="board"></div>

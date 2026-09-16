@@ -440,6 +440,40 @@
       });
     })
     .then(function () {
+      return check('mystery puzzles are dealt and verified exactly like the rest', function () {
+        // Hiding the colours changes what he can see, never whether the puzzle
+        // can be finished.
+        for (var i = 0; i < 200; i++) {
+          var p = WG.generate({ difficulty: 'mystery', seed: 9000 + i });
+          assert(p.hidden, 'mystery puzzle is not marked hidden');
+          var end = WR.replay(p.board, p.solution, p.capacity);
+          assert(end && WR.isSolved(end, p.capacity),
+            'mystery puzzle not solvable by its own solution (seed ' + p.seed + ')');
+        }
+      });
+    })
+    .then(function () {
+      return check('what he has seen is remembered from the move list alone', function () {
+        var p = WG.generate({ difficulty: 'mystery', seed: 123 });
+        var fresh = WR.replayRevealing(p.board, [], p.capacity);
+        // At the start: the top of each filled vial, and nothing else.
+        var visible = 0;
+        fresh.ids.forEach(function (v) {
+          v.forEach(function (id) { if (fresh.seen[id]) visible++; });
+        });
+        eq(visible, p.colours, 'should start with exactly one visible layer per filled vial');
+
+        // Replaying the whole solution must reveal everything, and must give
+        // the same answer every time it is recomputed — this is what makes it
+        // survive closing the app.
+        var done = WR.replayRevealing(p.board, p.solution, p.capacity);
+        var again = WR.replayRevealing(p.board, p.solution, p.capacity);
+        eq(Object.keys(done.seen).length, Object.keys(again.seen).length,
+          'recomputing what he has seen gave a different answer');
+        assert(WR.isSolved(done.board, p.capacity), 'tracked replay lost the game state');
+      });
+    })
+    .then(function () {
       return check('the same seed always produces the same puzzle', function () {
         var a = WG.generate({ difficulty: 'easy', seed: 4242 });
         var b = WG.generate({ difficulty: 'easy', seed: 4242 });
@@ -547,8 +581,72 @@
           eq(doc.querySelectorAll('.vial-tap').length, g.board.length,
             'a vial is missing from the screen');
           eq(g.board.length, g.puzzle.colours + g.puzzle.empties);
-          assert(doc.querySelector('.assurance').textContent.indexOf('can be solved') > -1,
-            'the promise is not on screen');
+          assert(/^Level \d+/.test(doc.getElementById('level').textContent),
+            'the level is not on screen: "' + doc.getElementById('level').textContent + '"');
+        });
+      });
+    })
+    .then(function () {
+      return check('mystery puzzles show only the liquid he has actually seen', function () {
+        var kept = localStorage.getItem('portal.settings');
+        var s = Portal.state.settings();
+        s.watersortDifficulty = 'mystery';
+        Portal.state.settings(s);
+        localStorage.removeItem('portal.water-sort.save');
+
+        return withGamePage(function (win, doc) {
+          var game = win.Portal.watersort.game;
+          var g = game._state();
+          assert(g.puzzle.hidden, 'mystery did not produce a hidden puzzle');
+
+          function shown(doc2) {
+            return [].map.call(doc2.querySelectorAll('.vial-tap'), function (t) {
+              return [].map.call(t.querySelectorAll('.layer'), function (l) {
+                return l.classList.contains('hidden-layer') ? '?' : 'C';
+              }).join('');
+            });
+          }
+
+          // Every filled vial starts with exactly its top layer showing.
+          shown(doc).forEach(function (v) {
+            if (!v.length) return;
+            eq(v, '???C'.slice(4 - v.length), 'a vial did not start with only its top showing');
+          });
+
+          // Pouring reveals what moved and what it uncovered.
+          var move = win.Portal.watersort.rules.moves(g.board, g.puzzle.capacity)[0];
+          game._tap(move.from);
+          game._tap(move.to);
+          var after = shown(doc);
+          assert(after[move.to].indexOf('C') > -1, 'poured liquid is still hidden');
+          assert(after[move.to].indexOf('?') === -1,
+            'liquid he just poured himself should not be a mystery');
+        }).then(function (r) {
+          if (kept === null) localStorage.removeItem('portal.settings');
+          else localStorage.setItem('portal.settings', kept);
+          localStorage.removeItem('portal.water-sort.save');
+          return r;
+        });
+      });
+    })
+    .then(function () {
+      return check('finishing a puzzle moves him up a level', function () {
+        var kept = Portal.state.progress('water-sort');
+        Portal.state.progress('water-sort', 40);
+        localStorage.removeItem('portal.water-sort.save');
+        return withGamePage(function (win, doc) {
+          var game = win.Portal.watersort.game;
+          eq(doc.getElementById('level').textContent.indexOf('Level 41'), 0,
+            'the level shown is not the next one up');
+          game._state().puzzle.solution.forEach(function (m) {
+            game._tap(m.from);
+            game._tap(m.to);
+          });
+          eq(win.Portal.state.progress('water-sort'), 41, 'the level did not go up');
+        }).then(function (r) {
+          Portal.state.progress('water-sort', kept);
+          localStorage.removeItem('portal.water-sort.save');
+          return r;
         });
       });
     })
