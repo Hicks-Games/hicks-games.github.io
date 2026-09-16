@@ -1,0 +1,69 @@
+/* Untangle — the pegboard. */
+
+#stage { align-items: stretch; }
+
+#board {
+  width: 100%;
+  height: 100%;
+  display: block;
+  touch-action: manipulation;
+}
+
+/* A string that crosses another is loud. A string that crosses nothing steps
+ * back out of the way. Sorting the board out visibly drains the red off it,
+ * which is the only progress signal the game gives — and the only one it
+ * needs. */
+.string {
+  stroke-linecap: round;
+  transition: stroke 180ms ease, stroke-width 180ms ease;
+}
+
+.string.tangled {
+  stroke: #d55e00;
+  stroke-width: 7;
+}
+
+.string.clear {
+  stroke: #9fb0bd;
+  stroke-width: 4;
+}
+
+/* An empty hole: somewhere a peg can go. */
+.hole {
+  fill: none;
+  stroke: #b9c3cb;
+  stroke-width: 3;
+  stroke-dasharray: 4 5;
+}
+
+.peg {
+  fill: var(--accent);
+  stroke: #ffffff;
+  stroke-width: 3;
+  transition: r 140ms ease, fill 140ms ease;
+}
+
+/* Invisible, and the same size whether or not there is a peg here, so the
+ * thing his thumb aims at never changes size or moves. */
+.peg-hit {
+  fill: transparent;
+  cursor: pointer;
+}
+
+.peg-group { outline: none; }
+
+/* The lifted peg grows and gains a ring. Two signals rather than one, so
+ * "which peg am I holding" is never a guess. */
+.peg-group.selected .peg {
+  r: 30;
+  fill: #d55e00;
+}
+
+.peg-group.selected .peg-hit {
+  stroke: rgba(213, 94, 0, 0.3);
+  stroke-width: 8;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .string, .peg { transition: none; }
+}

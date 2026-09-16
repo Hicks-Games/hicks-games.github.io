@@ -42,6 +42,8 @@
 <script src="../water-sort/rules.js"></script>
 <script src="../water-sort/solver.js"></script>
 <script src="../water-sort/generator.js"></script>
+<script src="../untangle/rules.js"></script>
+<script src="../untangle/generator.js"></script>
 <script>
 (function () {
   'use strict';
@@ -796,6 +798,288 @@
       return check('restore any real saved game', function () {
         if (savedGame === null) localStorage.removeItem('portal.water-sort.save');
         else localStorage.setItem('portal.water-sort.save', savedGame);
+      });
+    });
+  });
+
+  // ------------------------------------------------------------- untangle
+
+  var UR = Portal.untangle.rules;
+  var UG = Portal.untangle.generator;
+  var P = function (x, y) { return { x: x, y: y }; };
+
+  suite('untangle — when strings are tangled', function () {
+    return check('an X counts, parallel lines do not', function () {
+      assert(UR.segmentsCross(P(0, 0), P(10, 10), P(0, 10), P(10, 0)), 'a plain X');
+      assert(!UR.segmentsCross(P(0, 0), P(10, 0), P(0, 5), P(10, 5)), 'parallel lines');
+      assert(!UR.segmentsCross(P(0, 0), P(4, 0), P(6, 0), P(10, 0)), 'end to end, apart');
+    })
+    .then(function () {
+      return check('strings lying along each other count as tangled', function () {
+        assert(UR.segmentsCross(P(0, 0), P(10, 0), P(5, 0), P(15, 0)),
+          'overlapping strings look just as wrong as crossing ones');
+      });
+    })
+    .then(function () {
+      return check('a string ending on another string counts', function () {
+        assert(UR.segmentsCross(P(0, 0), P(10, 0), P(5, 0), P(5, 10)), 'a T junction');
+      });
+    })
+    .then(function () {
+      return check('strings that meet at a shared peg are not tangled', function () {
+        // The raw geometry says these touch...
+        assert(UR.segmentsCross(P(0, 0), P(10, 0), P(0, 0), P(0, 10)),
+          'geometrically they do touch');
+        // ...but as strings tied to the same peg, they are fine.
+        var holes = [P(0, 0), P(10, 0), P(0, 10)];
+        var pegAt = [0, 1, 2];
+        eq(UR.countTangled(holes, pegAt, [[0, 1], [0, 2]]), 0,
+          'two strings on the same peg were called tangled');
+      });
+    })
+    .then(function () {
+      return check('a board is only finished when nothing crosses anything', function () {
+        var holes = [P(0, 0), P(10, 10), P(0, 10), P(10, 0)];
+        var edges = [[0, 1], [2, 3]];
+        assert(!UR.isSolved(holes, [0, 1, 2, 3], edges), 'this board is crossed');
+        // Swapping two pegs pulls the strings apart.
+        assert(UR.isSolved(holes, UR.swap([0, 1, 2, 3], 1, 3), edges),
+          'swapping should have untangled it');
+      });
+    })
+    .then(function () {
+      return check('moving a peg is replayed from the move list, and undone by it', function () {
+        var start = [0, 1, null];
+        eq(UR.replay(start, []), start);
+        eq(UR.replay(start, [{ a: 0, b: 2 }]), [null, 1, 0], 'peg moved to the empty hole');
+        eq(UR.replay(start, [{ a: 0, b: 1 }]), [1, 0, null], 'two pegs changed places');
+        eq(UR.replay(start, [{ a: 0, b: 1 }, { a: 0, b: 1 }]), start,
+          'doing the same move twice should come back to the start');
+      });
+    })
+    .then(function () {
+      return check('a move list that does not fit the board is refused', function () {
+        eq(UR.replay([0, 1], [{ a: 0, b: 9 }]), null, 'hole that does not exist');
+        eq(UR.replay([0, 1], [{ a: 1, b: 1 }]), null, 'a hole swapped with itself');
+        eq(UR.replay([null, null], [{ a: 0, b: 1 }]), null, 'two empty holes');
+      });
+    });
+  });
+
+  suite('untangle — every board comes apart', function () {
+    return check('300 boards: the finished picture really has no crossings', function () {
+      var t0 = performance.now();
+      ['gentle', 'easy', 'medium', 'hard'].forEach(function (diff) {
+        for (var i = 0; i < 75; i++) {
+          var p = UG.generate({ difficulty: diff, seed: i + 1, width: 332, height: 560 });
+          var holes = p.holes.map(function (h) { return P(h.x * 332, h.y * 560); });
+          assert(UR.isSolved(holes, p.solved, p.edges),
+            diff + ': the way out is itself tangled (seed ' + p.seed + ')');
+        }
+      });
+      var ms = performance.now() - t0;
+      note('300 boards in ' + Math.round(ms) + 'ms (' + (ms / 300).toFixed(1) + 'ms each)');
+    })
+    .then(function () {
+      return check('a board always starts properly tangled', function () {
+        ['gentle', 'easy', 'medium', 'hard'].forEach(function (diff) {
+          for (var i = 0; i < 40; i++) {
+            var p = UG.generate({ difficulty: diff, seed: i + 500, width: 332, height: 560 });
+            var holes = p.holes.map(function (h) { return P(h.x * 332, h.y * 560); });
+            assert(UR.countTangled(holes, p.start, p.edges) >= 3,
+              diff + ': handed out a board that is nearly finished already');
+          }
+        });
+      });
+    })
+    .then(function () {
+      return check('no two holes are closer together than a thumb', function () {
+        ['gentle', 'easy', 'medium', 'hard'].forEach(function (diff) {
+          for (var i = 0; i < 40; i++) {
+            var p = UG.generate({ difficulty: diff, seed: i + 900, width: 332, height: 560 });
+            for (var a = 0; a < p.holes.length; a++) {
+              for (var b = a + 1; b < p.holes.length; b++) {
+                var gap = Math.hypot(
+                  (p.holes[a].x - p.holes[b].x) * 332,
+                  (p.holes[a].y - p.holes[b].y) * 560
+                );
+                assert(gap >= UG.MIN_GAP - 0.5,
+                  diff + ': two holes only ' + Math.round(gap) + 'px apart');
+              }
+            }
+          }
+        });
+      });
+    })
+    .then(function () {
+      return check('every peg is on a string, and every board has spare holes', function () {
+        for (var i = 0; i < 60; i++) {
+          var p = UG.generate({ difficulty: 'medium', seed: i + 1200, width: 332, height: 560 });
+          eq(p.holes.length, p.pegs + p.spares, 'wrong number of holes');
+          var onAString = {};
+          p.edges.forEach(function (e) { onAString[e[0]] = true; onAString[e[1]] = true; });
+          eq(Object.keys(onAString).length, p.pegs,
+            'a peg has no string, so he cannot tell when it is right');
+        }
+      });
+    })
+    .then(function () {
+      return check('the same seed always produces the same board', function () {
+        var a = UG.generate({ difficulty: 'easy', seed: 77, width: 332, height: 560 });
+        var b = UG.generate({ difficulty: 'easy', seed: 77, width: 332, height: 560 });
+        eq(a.holes, b.holes);
+        eq(a.edges, b.edges);
+        eq(a.start, b.start);
+      });
+    });
+  });
+
+  suite('untangle — playing the real game screen', function () {
+    var savedGame;
+
+    function withUntangle(fn) {
+      var frame = document.createElement('iframe');
+      frame.style.cssText = 'width:360px;height:760px;border:1px solid #2d3742;';
+      document.body.appendChild(frame);
+      frame.src = '../untangle/';
+      return new Promise(function (resolve, reject) {
+        frame.addEventListener('load', function () {
+          setTimeout(function () {
+            try {
+              var out = fn(frame.contentWindow, frame.contentDocument);
+              frame.remove();
+              resolve(out);
+            } catch (err) {
+              frame.remove();
+              reject(err);
+            }
+          }, 200);
+        });
+      });
+    }
+
+    return check('set aside any real saved game', function () {
+      savedGame = localStorage.getItem('portal.untangle.save');
+      localStorage.removeItem('portal.untangle.save');
+    })
+    .then(function () {
+      return check('the board draws a string for every string and a peg for every peg',
+        function () {
+          return withUntangle(function (win, doc) {
+            var g = win.Portal.untangle.game._state();
+            eq(doc.querySelectorAll('.string').length, g.puzzle.edges.length);
+            eq(doc.querySelectorAll('.peg').length, g.puzzle.pegs);
+            eq(doc.querySelectorAll('.hole').length, g.puzzle.spares);
+            assert(doc.querySelectorAll('.string.tangled').length > 0,
+              'nothing is drawn as tangled on a tangled board');
+            assert(/^Level \d+/.test(doc.getElementById('level').textContent),
+              'the level is not on screen');
+          });
+        });
+    })
+    .then(function () {
+      return check('the three ways out are always on screen, in order', function () {
+        return withUntangle(function (win, doc) {
+          var labels = [].map.call(doc.querySelectorAll('.controls .btn'), function (b) {
+            return b.textContent.trim();
+          });
+          eq(labels, ['Undo', 'Start Over', 'Home']);
+        });
+      });
+    })
+    .then(function () {
+      return check('every peg and hole is at least a thumb across', function () {
+        return withUntangle(function (win, doc) {
+          var hits = doc.querySelectorAll('.peg-hit');
+          assert(hits.length > 0, 'no tap targets at all');
+          [].forEach.call(hits, function (h) {
+            var box = h.getBoundingClientRect();
+            assert(box.width >= 64 && box.height >= 64,
+              'a tap target is only ' + Math.round(box.width) + 'px across');
+          });
+          assert(win.document.documentElement.scrollHeight <= win.innerHeight + 1,
+            'the board does not fit the screen');
+        });
+      });
+    })
+    .then(function () {
+      return check('an empty hole holds nothing to pick up', function () {
+        return withUntangle(function (win) {
+          var game = win.Portal.untangle.game;
+          var empty = game._state().pegAt.indexOf(null);
+          game._tap(empty);
+          eq(game._state().selected, null, 'he picked up an empty hole');
+          eq(game._state().moves.length, 0);
+        });
+      });
+    })
+    .then(function () {
+      return check('tapping a peg then a hole moves it, and undo puts it back', function () {
+        return withUntangle(function (win) {
+          var game = win.Portal.untangle.game;
+          var start = game._state();
+          var peg = start.pegAt.findIndex(function (p) { return p !== null; });
+          var empty = start.pegAt.indexOf(null);
+
+          game._tap(peg);
+          eq(game._state().selected, peg, 'the peg was not picked up');
+          game._tap(empty);
+
+          var moved = game._state();
+          eq(moved.moves.length, 1);
+          eq(moved.selected, null, 'the peg stayed in his hand');
+          eq(moved.pegAt[empty], start.pegAt[peg], 'the peg did not land in the hole');
+          eq(moved.pegAt[peg], null, 'the peg is in two places at once');
+
+          game._undo();
+          eq(game._state().pegAt, start.pegAt, 'undo did not put the peg back');
+          eq(game._state().moves.length, 0);
+        });
+      });
+    })
+    .then(function () {
+      return check('putting every peg home untangles the board and is celebrated',
+        function () {
+          return withUntangle(function (win, doc) {
+            var game = win.Portal.untangle.game;
+            var rules = win.Portal.untangle.rules;
+            var holes = game._screenHoles();
+            var target = game._state().puzzle.solved;
+
+            for (var h = 0; h < target.length; h++) {
+              if (target[h] === null) continue;
+              var cur = game._state().pegAt;
+              if (cur[h] === target[h]) continue;
+              game._tap(cur.indexOf(target[h]));   // lift the peg that belongs here
+              game._tap(h);                        // put it home
+            }
+
+            var end = game._state();
+            assert(rules.isSolved(holes, end.pegAt, end.puzzle.edges),
+              'the board is still tangled after putting every peg home');
+            eq(doc.querySelectorAll('.string.tangled').length, 0,
+              'strings are still drawn as tangled on a finished board');
+            assert(doc.querySelector('.celebrate'), 'finishing was not celebrated');
+          });
+        });
+    })
+    .then(function () {
+      return check('every move is saved as it happens', function () {
+        return withUntangle(function (win) {
+          var game = win.Portal.untangle.game;
+          var peg = game._state().pegAt.findIndex(function (p) { return p !== null; });
+          var empty = game._state().pegAt.indexOf(null);
+          game._tap(peg);
+          game._tap(empty);
+          var onDisk = JSON.parse(localStorage.getItem('portal.untangle.save'));
+          eq(onDisk.moves, game._state().moves, 'the save does not match the board');
+        });
+      });
+    })
+    .then(function () {
+      return check('restore any real saved game', function () {
+        if (savedGame === null) localStorage.removeItem('portal.untangle.save');
+        else localStorage.setItem('portal.untangle.save', savedGame);
       });
     });
   });

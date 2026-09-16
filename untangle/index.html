@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#f4f1ea">
+<title>Untangle</title>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="game.css">
+</head>
+<body>
+
+<div class="screen">
+  <div class="assurance" id="level"></div>
+
+  <div class="stage" id="stage">
+    <svg id="board" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+
+  <!-- Always here. Always these three. Always in this order. -->
+  <div class="controls">
+    <button class="btn" id="undo" type="button">Undo</button>
+    <button class="btn" id="restart" type="button">Start Over</button>
+    <button class="btn" type="button" data-portal-home>Home</button>
+  </div>
+</div>
+
+<script src="../shared/state.js"></script>
+<script src="../shared/guard.js"></script>
+<script src="../shared/shell.js"></script>
+<script src="../shared/celebrate.js"></script>
+<script src="rules.js"></script>
+<script src="generator.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
