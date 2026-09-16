@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dad's Games — tests</title>
+<style>
+  body {
+    margin: 0; padding: 20px;
+    background: #14181d; color: #dfe6ec;
+    font: 15px/1.6 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .sub { color: #8a97a3; margin-bottom: 20px; font-size: 13px; }
+  #banner {
+    padding: 14px 18px; border-radius: 8px; margin-bottom: 20px;
+    font-size: 18px; font-weight: 700;
+  }
+  .running { background: #2d3742; color: #dfe6ec; }
+  .allpass { background: #14532d; color: #b7f7cf; }
+  .anyfail { background: #5c1a1a; color: #ffd0d0; }
+  h2 { font-size: 15px; margin: 22px 0 6px; color: #9fb4c7; }
+  .case { padding: 2px 0 2px 22px; text-indent: -22px; }
+  .pass::before { content: "PASS  "; color: #4ade80; }
+  .fail::before { content: "FAIL  "; color: #f87171; }
+  .why { color: #f87171; padding-left: 22px; }
+</style>
+</head>
+<body>
+<h1>Dad's Games — test harness</h1>
+<div class="sub">
+  Every suite must be green before any deploy. This page is the whole test
+  framework; there is nothing to install.
+</div>
+<div id="banner" class="running">running…</div>
+<div id="out"></div>
+
+<script src="../shared/state.js"></script>
+<script src="../shared/guard.js"></script>
+<script src="../shared/shell.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var out = document.getElementById('out');
+  var banner = document.getElementById('banner');
+  var passed = 0, failed = 0;
+  var queue = [];
+
+  function suite(name, fn) { queue.push({ name: name, fn: fn }); }
+
+  function assert(cond, msg) {
+    if (!cond) throw new Error(msg || 'assertion failed');
+  }
+  function eq(actual, expected, msg) {
+    var a = JSON.stringify(actual), b = JSON.stringify(expected);
+    if (a !== b) throw new Error((msg || 'not equal') + ' — got ' + a + ', wanted ' + b);
+  }
+
+  function heading(name) {
+    var h = document.createElement('h2');
+    h.textContent = name;
+    out.appendChild(h);
+  }
+
+  function report(desc, err) {
+    var line = document.createElement('div');
+    line.className = 'case ' + (err ? 'fail' : 'pass');
+    line.textContent = desc;
+    out.appendChild(line);
+    if (err) {
+      failed++;
+      var why = document.createElement('div');
+      why.className = 'why';
+      why.textContent = err.message;
+      out.appendChild(why);
+    } else {
+      passed++;
+    }
+  }
+
+  // A test body may return a promise; the runner waits for it either way.
+  function check(desc, fn) {
+    var result;
+    try {
+      result = fn();
+    } catch (err) {
+      report(desc, err);
+      return Promise.resolve();
+    }
+    if (result && typeof result.then === 'function') {
+      return result.then(
+        function () { report(desc, null); },
+        function (err) { report(desc, err); }
+      );
+    }
+    report(desc, null);
+    return Promise.resolve();
+  }
+
+  // ---------------------------------------------------------------- state
+
+  var G = '__test__';
+  var KEY = 'portal.' + G + '.save';
+
+  suite('state.js — saving and resuming', function () {
+    return check('storage is available in this browser', function () {
+      assert(Portal.state.available, 'localStorage unavailable — later results are meaningless');
+    })
+    .then(function () {
+      return check('a saved game comes back exactly as stored', function () {
+        var puzzle = { vials: [[1, 2], [2, 1]], colors: 2 };
+        var moves = [{ from: 0, to: 1 }, { from: 1, to: 0 }];
+        Portal.state.save(G, puzzle, moves);
+        var got = Portal.state.load(G);
+        eq(got.puzzle, puzzle, 'puzzle changed in the round trip');
+        eq(got.moves, moves, 'moves changed in the round trip');
+      });
+    })
+    .then(function () {
+      return check('no save yet means a fresh puzzle, not an error', function () {
+        Portal.state.clear(G);
+        eq(Portal.state.load(G), null);
+      });
+    })
+    .then(function () {
+      return check('a save with no moves yet is still resumable', function () {
+        Portal.state.save(G, { vials: [] }, []);
+        var got = Portal.state.load(G);
+        assert(got !== null, 'a freshly started puzzle should resume');
+        eq(got.moves, []);
+      });
+    })
+    .then(function () {
+      return check('corrupted save gives a fresh puzzle and is never deleted', function () {
+        localStorage.setItem(KEY, '{ this is not json');
+        eq(Portal.state.load(G), null, 'should refuse to load');
+        assert(localStorage.getItem(KEY) !== null,
+          'the corrupt record was deleted — it must be left alone for rescue');
+      });
+    })
+    .then(function () {
+      return check('a save from a newer version is left untouched', function () {
+        localStorage.setItem(KEY, JSON.stringify({
+          v: Portal.state.SCHEMA + 5, puzzle: { x: 1 }, moves: []
+        }));
+        eq(Portal.state.load(G), null, 'should not try to read a future format');
+        assert(localStorage.getItem(KEY) !== null, 'a future save must never be eaten');
+      });
+    })
+    .then(function () {
+      return check('a record missing its moves list is rejected, not half-loaded', function () {
+        localStorage.setItem(KEY, JSON.stringify({ v: Portal.state.SCHEMA, puzzle: { x: 1 } }));
+        eq(Portal.state.load(G), null);
+      });
+    })
+    .then(function () {
+      return check('clearing one game leaves other games alone', function () {
+        Portal.state.save(G, { a: 1 }, []);
+        Portal.state.save(G + '2', { b: 2 }, []);
+        Portal.state.clear(G);
+        eq(Portal.state.load(G), null);
+        assert(Portal.state.load(G + '2') !== null, 'clear() hit the wrong game');
+        Portal.state.clear(G + '2');
+      });
+    })
+    .then(function () {
+      return check('every key written lives under the portal namespace', function () {
+        Portal.state.save(G, { a: 1 }, []);
+        Portal.state.settings({ difficulty: 'easy' });
+        for (var i = 0; i < localStorage.length; i++) {
+          var k = localStorage.key(i);
+          assert(k.indexOf('portal.') === 0,
+            'found an un-namespaced key: ' + k);
+        }
+        Portal.state.clear(G);
+      });
+    })
+    .then(function () {
+      return check('settings survive a round trip', function () {
+        Portal.state.settings({ difficulty: 'easy', textScale: 1.2 });
+        eq(Portal.state.settings().difficulty, 'easy');
+        eq(Portal.state.settings().textScale, 1.2);
+      });
+    });
+  });
+
+  // ---------------------------------------------------------------- guard
+
+  suite('guard.js — crash journal', function () {
+    var saved;
+    return check('journal starts readable', function () {
+      saved = localStorage.getItem('portal.errors');
+      Portal.guard.clearJournal();
+      eq(Portal.guard.journal(), []);
+    })
+    .then(function () {
+      return check('the journal keeps only the most recent 20 errors', function () {
+        var many = [];
+        for (var i = 0; i < 30; i++) {
+          many.push({ at: Date.now(), game: 'x', message: 'err' + i });
+        }
+        localStorage.setItem('portal.errors', JSON.stringify(many));
+        // Recording one more must trim from the front, not the back. Uses the
+        // journal half only — the full handler would paint a recovery screen
+        // over these results. The full path is covered by the iframe below.
+        Portal.guard._record({ at: Date.now(), game: 'x', message: 'newest' });
+        var j = Portal.guard.journal();
+        assert(j.length <= 20, 'journal grew past its cap: ' + j.length);
+        eq(j[j.length - 1].message, 'newest', 'the newest error was dropped');
+      });
+    })
+    .then(function () {
+      return check('a corrupted journal reads as empty instead of throwing', function () {
+        localStorage.setItem('portal.errors', 'not json at all');
+        eq(Portal.guard.journal(), []);
+      });
+    })
+    .then(function () {
+      return check('journal restored after tests', function () {
+        if (saved === null) Portal.guard.clearJournal();
+        else localStorage.setItem('portal.errors', saved);
+      });
+    });
+  });
+
+  suite('guard.js — a real uncaught error', function () {
+    return check('a crashing page shows the recovery screen and journals the error',
+      function () {
+        var before = Portal.guard.journal().length;
+        var frame = document.createElement('iframe');
+        frame.style.cssText = 'width:320px;height:200px;border:1px solid #2d3742;';
+        document.body.appendChild(frame);
+        frame.src = 'fixture-crash.html';
+
+        return new Promise(function (resolve, reject) {
+          setTimeout(function () {
+            try {
+              var doc = frame.contentDocument;
+              var btn = doc.querySelector('[role="alertdialog"] button');
+              assert(btn, 'no recovery screen appeared on a page that threw');
+              assert(/games/i.test(btn.textContent),
+                'recovery button should offer a way back to the games');
+
+              var entries = Portal.guard.journal();
+              assert(entries.length > before, 'the crash was not written to the journal');
+              var last = entries[entries.length - 1];
+              eq(last.game, '__testcrash__', 'the journal recorded the wrong game');
+              assert(last.message, 'journal entry has no message to debug from');
+
+              frame.remove();
+              resolve();
+            } catch (err) {
+              frame.remove();
+              reject(err);
+            }
+          }, 600);
+        });
+      });
+  });
+
+  // ---------------------------------------------------------------- run
+
+  (function run(i) {
+    if (i >= queue.length) {
+      banner.className = failed ? 'anyfail' : 'allpass';
+      banner.textContent = failed
+        ? failed + ' FAILED, ' + passed + ' passed — do not deploy'
+        : 'all ' + passed + ' checks passed';
+      return;
+    }
+    heading(queue[i].name);
+    Promise.resolve(queue[i].fn()).then(function () { run(i + 1); });
+  })(0);
+})();
+</script>
+</body>
+</html>

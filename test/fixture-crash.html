@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>crash fixture</title>
+</head>
+<body>
+<!-- Loaded in an iframe by test.html. Throws on purpose so the crash guard
+     can be tested the way it will actually be used: a real uncaught error on
+     a real page, not a function call pretending to be one. -->
+<script src="../shared/state.js"></script>
+<script src="../shared/guard.js"></script>
+<script src="../shared/shell.js"></script>
+<script>
+  Portal.shell.start({ game: '__testcrash__' });
+  setTimeout(function () {
+    null.thisPropertyDoesNotExist;
+  }, 0);
+</script>
+</body>
+</html>
