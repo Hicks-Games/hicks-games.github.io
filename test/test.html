@@ -24,6 +24,7 @@
   .pass::before { content: "PASS  "; color: #4ade80; }
   .fail::before { content: "FAIL  "; color: #f87171; }
   .why { color: #f87171; padding-left: 22px; }
+  .note { color: #7dd3fc; padding-left: 22px; font-size: 13px; }
 </style>
 </head>
 <body>
@@ -38,6 +39,9 @@
 <script src="../shared/state.js"></script>
 <script src="../shared/guard.js"></script>
 <script src="../shared/shell.js"></script>
+<script src="../water-sort/rules.js"></script>
+<script src="../water-sort/solver.js"></script>
+<script src="../water-sort/generator.js"></script>
 <script>
 (function () {
   'use strict';
@@ -61,6 +65,15 @@
     var h = document.createElement('h2');
     h.textContent = name;
     out.appendChild(h);
+  }
+
+  /* Informational output — timings and sizes. Not a pass or a fail, but the
+   * numbers that say whether the difficulty caps are still honest. */
+  function note(text) {
+    var line = document.createElement('div');
+    line.className = 'note';
+    line.textContent = text;
+    out.appendChild(line);
   }
 
   function report(desc, err) {
@@ -257,6 +270,241 @@
           }, 600);
         });
       });
+  });
+
+  // ----------------------------------------------------- water sort rules
+
+  var WR = Portal.watersort.rules;
+
+  suite('water sort — the rules', function () {
+    return check('the pourable run is the matching colours on top', function () {
+      eq(WR.topRun([]), 0);
+      eq(WR.topRun([1]), 1);
+      eq(WR.topRun([2, 1, 1]), 2);
+      eq(WR.topRun([1, 1, 1, 1]), 4);
+      eq(WR.topRun([1, 1, 2]), 1);
+    })
+    .then(function () {
+      return check('you may pour onto an empty vial or a matching colour only', function () {
+        var board = [[1, 1], [1], [2], []];
+        assert(WR.canPour(board, 0, 1, 4), 'matching colours should pour');
+        assert(!WR.canPour(board, 0, 2, 4), 'different colours must not pour');
+        assert(WR.canPour(board, 0, 3, 4), 'anything may start an empty vial');
+        assert(!WR.canPour(board, 3, 0, 4), 'an empty vial has nothing to pour');
+        assert(!WR.canPour(board, 0, 0, 4), 'a vial cannot pour into itself');
+      });
+    })
+    .then(function () {
+      return check('a full vial cannot be poured into', function () {
+        var board = [[1], [1, 1, 1, 1]];
+        assert(!WR.canPour(board, 0, 1, 4));
+      });
+    })
+    .then(function () {
+      return check('a pour moves as much of the run as fits, and no more', function () {
+        // three units want to move, but only two will fit
+        eq(WR.pourAmount([[1, 1, 1], [1, 1]], 0, 1, 4), 2);
+        eq(WR.pourAmount([[2, 1, 1], []], 0, 1, 4), 2);
+        eq(WR.pourAmount([[2, 1, 1], [1]], 0, 1, 4), 2);
+      });
+    })
+    .then(function () {
+      return check('pouring produces a new board and leaves the old one untouched', function () {
+        var before = [[2, 1, 1], []];
+        var after = WR.pour(before, 0, 1, 4);
+        eq(before, [[2, 1, 1], []], 'the original board was mutated');
+        eq(after, [[2], [1, 1]]);
+      });
+    })
+    .then(function () {
+      return check('an illegal pour returns nothing rather than a broken board', function () {
+        eq(WR.pour([[1], [2]], 0, 1, 4), null);
+      });
+    })
+    .then(function () {
+      return check('a puzzle is only won when every colour is fully gathered', function () {
+        assert(WR.isSolved([[1, 1, 1, 1], [2, 2, 2, 2], []], 4), 'this is a win');
+        assert(!WR.isSolved([[1, 1], [1, 1], []], 4),
+          'a colour split across two vials is not a win');
+        assert(!WR.isSolved([[1, 1, 2, 2], []], 4), 'mixed vials are not a win');
+        assert(WR.isSolved([[], []], 4), 'an empty board is trivially won');
+      });
+    })
+    .then(function () {
+      return check('replaying a move list rebuilds the position exactly', function () {
+        var start = [[2, 1, 1], [], [2]];
+        var moves = [{ from: 0, to: 1 }, { from: 0, to: 2 }];
+        eq(WR.replay(start, moves, 4), [[], [1, 1], [2, 2]]);
+        eq(WR.replay(start, [], 4), start, 'no moves means the starting board');
+      });
+    })
+    .then(function () {
+      return check('a move list that does not fit the board is refused, not guessed at', function () {
+        eq(WR.replay([[1], [2]], [{ from: 0, to: 1 }], 4), null);
+      });
+    });
+  });
+
+  // ---------------------------------------------------------- water sort solver
+
+  var WS = Portal.watersort.solver;
+
+  suite('water sort — the solver', function () {
+    return check('it finds the route through a simple position', function () {
+      var board = [[1, 1, 1], [1], [2, 2, 2, 2], []];
+      var result = WS.solve(board, 4);
+      assert(result.solved, 'a solvable board was reported unsolvable');
+      var end = WR.replay(board, result.moves, 4);
+      assert(end && WR.isSolved(end, 4), 'the solution it returned does not actually win');
+    })
+    .then(function () {
+      return check('an already-finished board needs no moves', function () {
+        var result = WS.solve([[1, 1, 1, 1], []], 4);
+        assert(result.solved);
+        eq(result.moves, []);
+      });
+    })
+    .then(function () {
+      return check('a genuinely impossible board is proven impossible, not guessed', function () {
+        // Tops differ and there is nowhere to put anything: no legal move exists.
+        var result = WS.solve([[0, 1, 0, 1], [1, 0, 1, 0]], 4);
+        assert(!result.solved, 'an unsolvable board was reported solvable');
+        eq(result.reason, 'exhausted',
+          'should be proven by exhausting the search, not by running out of budget');
+      });
+    })
+    .then(function () {
+      return check('the budget is honoured and reported honestly', function () {
+        var puzzle = Portal.watersort.generator.generate({ difficulty: 'hard', seed: 7 });
+        var result = WS.solve(puzzle.board, 4, 5); // absurdly small budget
+        assert(!result.solved, 'a 5-position budget should not solve a hard board');
+        eq(result.reason, 'budget', 'running out of time must not be reported as impossible');
+      });
+    });
+  });
+
+  // ------------------------------------------------------- water sort generator
+
+  var WG = Portal.watersort.generator;
+
+  suite('water sort — every puzzle is finishable', function () {
+    return check('a generated puzzle is never already solved', function () {
+      for (var i = 0; i < 50; i++) {
+        var p = WG.generate({ difficulty: 'easy', seed: 1000 + i });
+        assert(!WR.isSolved(p.board, p.capacity), 'handed out an already-finished puzzle');
+      }
+    })
+    .then(function () {
+      return check('colour counts are always exact — nothing lost or duplicated', function () {
+        for (var i = 0; i < 50; i++) {
+          var p = WG.generate({ difficulty: 'medium', seed: 2000 + i });
+          var counts = {};
+          p.board.forEach(function (v) {
+            v.forEach(function (c) { counts[c] = (counts[c] || 0) + 1; });
+          });
+          eq(Object.keys(counts).length, p.colours, 'wrong number of colours');
+          for (var c = 0; c < p.colours; c++) {
+            eq(counts[c], p.capacity, 'colour ' + c + ' has the wrong number of units');
+          }
+          eq(p.board.length, p.colours + p.empties, 'wrong number of vials');
+        }
+      });
+    })
+    .then(function () {
+      return check('a puzzle opens the way the real game opens: full vials, two empty',
+        function () {
+          // Dad has played this game for years. A board that starts with
+          // half-filled vials is subtly not the game he knows.
+          ['gentle', 'easy', 'medium', 'hard'].forEach(function (diff) {
+            for (var i = 0; i < 40; i++) {
+              var p = WG.generate({ difficulty: diff, seed: 3000 + i });
+              var emptyCount = 0;
+              p.board.forEach(function (v) {
+                if (v.length === 0) { emptyCount++; return; }
+                eq(v.length, p.capacity,
+                  diff + ': a starting vial was only part full (seed ' + p.seed + ')');
+              });
+              eq(emptyCount, p.empties,
+                diff + ': wrong number of empty vials to work with');
+            }
+          });
+        });
+    })
+    .then(function () {
+      return check('a puzzle is never so nearly sorted that it is not a puzzle', function () {
+        for (var i = 0; i < 200; i++) {
+          var p = WG.generate({ difficulty: 'easy', seed: 8000 + i });
+          assert(p.solution.length >= p.colours,
+            'dealt a board that solves in ' + p.solution.length + ' moves (seed ' + p.seed + ')');
+        }
+      });
+    })
+    .then(function () {
+      return check('the same seed always produces the same puzzle', function () {
+        var a = WG.generate({ difficulty: 'easy', seed: 4242 });
+        var b = WG.generate({ difficulty: 'easy', seed: 4242 });
+        eq(a.board, b.board, 'seeded generation is not reproducible');
+      });
+    })
+    .then(function () {
+      return check('1000 easy puzzles: every stored solution genuinely wins', function () {
+        var t0 = performance.now();
+        var worst = 0, total = 0;
+        for (var i = 0; i < 1000; i++) {
+          var p = WG.generate({ difficulty: 'easy', seed: i + 1 });
+          var end = WR.replay(p.board, p.solution, p.capacity);
+          assert(end !== null, 'stored solution contains an illegal move (seed ' + p.seed + ')');
+          assert(WR.isSolved(end, p.capacity),
+            'stored solution does not finish the puzzle (seed ' + p.seed + ')');
+          total += p.solution.length;
+          if (p.solution.length > worst) worst = p.solution.length;
+        }
+        var ms = performance.now() - t0;
+        note('1000 easy puzzles in ' + Math.round(ms) + 'ms (' +
+          (ms / 1000).toFixed(1) + 'ms each), ' +
+          Math.round(total / 1000) + ' moves average, ' + worst + ' longest');
+        assert(ms / 1000 < 250,
+          'generation averaged over the 250ms budget — difficulty caps need revisiting');
+      });
+    })
+    .then(function () {
+      return check('300 gentle puzzles: every stored solution genuinely wins', function () {
+        for (var i = 0; i < 300; i++) {
+          var p = WG.generate({ difficulty: 'gentle', seed: i + 50000 });
+          var end = WR.replay(p.board, p.solution, p.capacity);
+          assert(end && WR.isSolved(end, p.capacity),
+            'gentle puzzle not solvable by its own solution (seed ' + p.seed + ')');
+        }
+      });
+    })
+    .then(function () {
+      return check('300 medium puzzles: every stored solution genuinely wins', function () {
+        var t0 = performance.now();
+        for (var i = 0; i < 300; i++) {
+          var p = WG.generate({ difficulty: 'medium', seed: i + 60000 });
+          var end = WR.replay(p.board, p.solution, p.capacity);
+          assert(end && WR.isSolved(end, p.capacity),
+            'medium puzzle not solvable by its own solution (seed ' + p.seed + ')');
+        }
+        var ms = performance.now() - t0;
+        note('300 medium puzzles in ' + Math.round(ms) + 'ms (' +
+          (ms / 300).toFixed(1) + 'ms each)');
+      });
+    })
+    .then(function () {
+      return check('100 hard puzzles: every stored solution genuinely wins', function () {
+        var t0 = performance.now();
+        for (var i = 0; i < 100; i++) {
+          var p = WG.generate({ difficulty: 'hard', seed: i + 70000 });
+          var end = WR.replay(p.board, p.solution, p.capacity);
+          assert(end && WR.isSolved(end, p.capacity),
+            'hard puzzle not solvable by its own solution (seed ' + p.seed + ')');
+        }
+        var ms = performance.now() - t0;
+        note('100 hard puzzles in ' + Math.round(ms) + 'ms (' +
+          (ms / 100).toFixed(1) + 'ms each)');
+      });
+    });
   });
 
   // ---------------------------------------------------------------- run
