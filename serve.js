@@ -68,21 +68,40 @@ const server = http.createServer((req, res) => {
   });
 });
 
-function lanAddress() {
-  for (const nics of Object.values(os.networkInterfaces())) {
+// Machines have several addresses (wifi, ethernet, VPN, Bluetooth), and the
+// first one Node reports is often not the one the phone can reach. Rank the
+// real private LAN ranges first, list them all, and let the human pick.
+function lanAddresses() {
+  const found = [];
+  for (const [name, nics] of Object.entries(os.networkInterfaces())) {
     for (const nic of nics || []) {
-      if (nic.family === 'IPv4' && !nic.internal) return nic.address;
+      if (nic.family !== 'IPv4' || nic.internal) continue;
+      const a = nic.address;
+      // 169.254.x.x is link-local: the address a NIC invents when it has no
+      // network. Never reachable from the phone.
+      if (a.startsWith('169.254.')) continue;
+      const isPrivateLan =
+        a.startsWith('192.168.') ||
+        a.startsWith('10.') ||
+        /^172\.(1[6-9]|2\d|3[01])\./.test(a);
+      found.push({ address: a, name, rank: isPrivateLan ? 0 : 1 });
     }
   }
-  return null;
+  return found.sort((x, y) => x.rank - y.rank);
 }
 
 server.listen(PORT, () => {
-  const lan = lanAddress();
   console.log('');
   console.log("  Dad's Games — dev server");
   console.log(`  This computer:  http://localhost:${PORT}`);
-  if (lan) console.log(`  Phone on wifi:  http://${lan}:${PORT}`);
+  const nets = lanAddresses();
+  if (nets.length) {
+    console.log('  Phone on wifi:  ' + `http://${nets[0].address}:${PORT}` +
+      `   (${nets[0].name})`);
+    for (const n of nets.slice(1)) {
+      console.log(`                  http://${n.address}:${PORT}   (${n.name})`);
+    }
+  }
   console.log('');
   console.log('  Note: service workers need https or localhost, so offline mode');
   console.log('  will not register over the LAN address. Test offline behavior');
