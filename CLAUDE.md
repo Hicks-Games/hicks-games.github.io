@@ -25,6 +25,9 @@ asks a question, or takes over the screen except the win celebration.
   games.
 - **Tap-only input.** No drag gestures anywhere. Tap to select, tap to act.
   Minimum 64px touch targets, minimum 24px text, high contrast.
+- **Every screen fits 360 x 760 CSS pixels without scrolling.** That is the
+  S10's viewport. A game board that needs scrolling to see is a game he can
+  lose track of.
 - **No prompts, banners, toasts, modals, confirmations, or questions** shown to
   the player. Recovery is three persistent controls present in every game at all
   times, in the same positions: **Undo**, **Start Over**, **Home**.
