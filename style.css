@@ -1,0 +1,212 @@
+/* Shared look and feel for the whole portal.
+ *
+ * Sizing rules that are not negotiable, because of who plays this:
+ *   - nothing you can tap is smaller than 64px
+ *   - no text below 20px, and nothing that matters below 24px
+ *   - every screen fits 360 x 760 without scrolling (Galaxy S10)
+ *
+ * The portal deliberately commits to one light theme rather than following
+ * the phone's dark mode. A game that looks different depending on a setting
+ * he didn't knowingly change is a game he has to re-learn.
+ */
+
+:root {
+  color-scheme: light;
+
+  --bg: #f4f1ea;
+  --surface: #ffffff;
+  --ink: #22303c;
+  --ink-soft: #64757f;
+  --line: #c9d2d9;
+
+  --accent: #1b3a5c;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(27, 58, 92, 0.14);
+
+  --radius: 16px;
+  --gap: 12px;
+  --edge: 14px;
+
+  /* Okabe–Ito: a palette chosen so the colours stay distinguishable with any
+   * common form of colour blindness, which also makes them easy to tell apart
+   * for ageing eyes. Ordered so the easiest pairs are used first, since the
+   * gentle and easy puzzles only reach for the first three or four. */
+  --c0: #e69f00;
+  --c1: #56b4e9;
+  --c2: #009e73;
+  --c3: #f0e442;
+  --c4: #0072b2;
+  --c5: #d55e00;
+  --c6: #cc79a7;
+  --c7: #3b3b3b;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;              /* nothing in the portal ever scrolls */
+  overscroll-behavior: none;     /* no pull-to-refresh */
+  background: var(--bg);
+  color: var(--ink);
+  font: 500 20px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;    /* no double-tap zoom */
+}
+
+/* Every page is this shape: a line of reassurance, the thing you came for,
+ * and the way out. The way out never moves. */
+.screen {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: var(--edge);
+  padding-block: calc(var(--edge) + env(safe-area-inset-top, 0px))
+                 calc(var(--edge) + env(safe-area-inset-bottom, 0px));
+  gap: var(--gap);
+}
+
+.assurance {
+  flex: none;
+  text-align: center;
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--ink-soft);
+  min-height: 26px;
+}
+
+.stage {
+  flex: 1;
+  min-height: 0;                 /* lets the stage shrink instead of overflowing */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---------------------------------------------------------------- buttons */
+
+.btn {
+  /* line-height leaves room for a label that wraps. "Start Over" does not fit
+   * on one line at 360px, and shrinking the type to force it would put the
+   * most important words on the screen below the size he can read
+   * comfortably. Two big lines beat one small one. */
+  font: 600 24px/1.1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--ink);
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  min-height: 72px;
+  padding: 0 14px;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 90ms ease, background 90ms ease;
+}
+
+.btn:active { transform: scale(0.96); background: #eef2f5; }
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.btn-primary:active { background: #24496f; }
+
+/* The three controls that are present in every game, always, in the same
+ * places. They do not grey out, move, or disappear — if he is lost, the way
+ * back is where it always was. */
+.controls {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.controls .btn {
+  padding: 0 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+/* ------------------------------------------------------------------- menu */
+
+.menu-title {
+  flex: none;
+  text-align: center;
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin: 4px 0 0;
+}
+
+.menu-list {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  gap: var(--gap);
+  align-content: center;
+  grid-auto-rows: minmax(96px, 148px);
+}
+
+.game-button {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 22px;
+  text-align: left;
+  font-size: 30px;
+  font-weight: 700;
+}
+
+.game-button svg { flex: none; width: 58px; height: 58px; }
+
+/* ------------------------------------------------------------ celebration */
+
+.celebrate {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(244, 241, 234, 0.97);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  padding: var(--edge);
+}
+
+.celebrate canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.celebrate-text {
+  position: relative;
+  font-size: 46px;
+  font-weight: 800;
+  letter-spacing: -1px;
+  text-align: center;
+  color: var(--accent);
+}
+
+.celebrate .btn {
+  position: relative;
+  min-width: 260px;
+  min-height: 88px;
+  font-size: 30px;
+}
+
+.celebrate .btn-quiet {
+  min-height: 72px;
+  min-width: 180px;
+  font-size: 22px;
+  color: var(--ink-soft);
+}

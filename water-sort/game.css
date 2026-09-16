@@ -1,0 +1,79 @@
+/* Water sort — the board.
+ *
+ * Vial widths are capped rather than stretched: on a wide screen the puzzle
+ * stays a comfortable hand-sized thing instead of sprawling, and on the S10
+ * it fills the width it needs.
+ */
+
+.board {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 3), 1fr);
+  gap: 10px 8px;
+  width: 100%;
+  max-width: 340px;
+}
+
+/* The tappable area is the whole cell, not just the glass — a shaky tap that
+ * lands beside a vial still means that vial. */
+.vial-tap {
+  -webkit-appearance: none;
+  appearance: none;
+  background: none;
+  border: 0;
+  padding: 10px 2px;
+  min-height: 64px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.vial {
+  width: 100%;
+  max-width: 92px;                  /* as large as the screen allows: he is
+                                       reading these across a room, not a desk */
+  aspect-ratio: 1 / 2.05;
+  background: var(--surface);
+  border: 3px solid #b3bec7;
+  border-top: none;
+  border-radius: 4px 4px 26px 26px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column-reverse;   /* liquid fills from the bottom */
+  transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+}
+
+/* The picked-up vial lifts clear of the others and gains a ring. Two signals,
+ * not one, so "which vial am I holding?" is never a guess. */
+.vial-tap.selected .vial {
+  transform: translateY(-14px) scale(1.06);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+
+.layer {
+  width: 100%;
+  height: 25%;                      /* four units to a vial */
+  transform-origin: bottom center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 800;
+  color: rgba(0, 0, 0, 0.42);
+}
+
+/* Liquid arriving in a vial rises into place. Short on purpose: long enough
+ * to show where it went, short enough that it never feels like waiting. */
+.layer.arriving { animation: pour-in 220ms ease-out; }
+
+@keyframes pour-in {
+  from { transform: scaleY(0.15); opacity: 0.35; }
+  to   { transform: scaleY(1);    opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vial { transition: none; }
+  .layer.arriving { animation: none; }
+}

@@ -507,6 +507,201 @@
     });
   });
 
+  // ------------------------------------------------- water sort, end to end
+
+  /* Drives the real game page in an iframe: the real DOM, the real tap
+   * handler, the real save format. Anything that only works because a test
+   * called a convenient internal function gets caught here. */
+  function withGamePage(fn) {
+    var frame = document.createElement('iframe');
+    frame.style.cssText = 'width:360px;height:760px;border:1px solid #2d3742;';
+    document.body.appendChild(frame);
+    frame.src = '../water-sort/';
+
+    return new Promise(function (resolve, reject) {
+      frame.addEventListener('load', function () {
+        setTimeout(function () {
+          try {
+            var result = fn(frame.contentWindow, frame.contentDocument);
+            frame.remove();
+            resolve(result);
+          } catch (err) {
+            frame.remove();
+            reject(err);
+          }
+        }, 150);
+      });
+    });
+  }
+
+  suite('water sort — playing the real game screen', function () {
+    var savedGame;
+    return check('set aside any real saved game', function () {
+      savedGame = localStorage.getItem('portal.water-sort.save');
+      localStorage.removeItem('portal.water-sort.save');
+    })
+    .then(function () {
+      return check('the board opens with a vial for every colour and two spare', function () {
+        return withGamePage(function (win, doc) {
+          var g = win.Portal.watersort.game._state();
+          eq(doc.querySelectorAll('.vial-tap').length, g.board.length,
+            'a vial is missing from the screen');
+          eq(g.board.length, g.puzzle.colours + g.puzzle.empties);
+          assert(doc.querySelector('.assurance').textContent.indexOf('can be solved') > -1,
+            'the promise is not on screen');
+        });
+      });
+    })
+    .then(function () {
+      return check('the three ways out are always on screen, in order', function () {
+        return withGamePage(function (win, doc) {
+          var labels = [].map.call(doc.querySelectorAll('.controls .btn'), function (b) {
+            return b.textContent.trim();
+          });
+          eq(labels, ['Undo', 'Start Over', 'Home']);
+        });
+      });
+    })
+    .then(function () {
+      return check('tapping a vial then another pours, and undo puts it back', function () {
+        return withGamePage(function (win) {
+          var game = win.Portal.watersort.game;
+          var R2 = win.Portal.watersort.rules;
+          var start = game._state();
+
+          var move = R2.moves(start.board, start.puzzle.capacity)[0];
+          game._tap(move.from);
+          eq(game._state().selected, move.from, 'the first tap did not pick up the vial');
+
+          game._tap(move.to);
+          var poured = game._state();
+          eq(poured.moves.length, 1, 'the second tap did not pour');
+          eq(poured.selected, null, 'the vial stayed held after pouring');
+          assert(JSON.stringify(poured.board) !== JSON.stringify(start.board),
+            'the board did not change');
+
+          game._undo();
+          eq(game._state().board, start.board, 'undo did not restore the board');
+          eq(game._state().moves.length, 0);
+        });
+      });
+    })
+    .then(function () {
+      return check('undo with nothing to undo does nothing at all', function () {
+        return withGamePage(function (win, doc) {
+          var game = win.Portal.watersort.game;
+          var before = game._state();
+          game._undo();
+          game._undo();
+          eq(game._state().board, before.board, 'undo changed the board from a clean start');
+          eq(doc.querySelectorAll('.celebrate').length, 0, 'something appeared on screen');
+        });
+      });
+    })
+    .then(function () {
+      return check('start over returns to the opening board, however far in he is', function () {
+        return withGamePage(function (win) {
+          var game = win.Portal.watersort.game;
+          var R2 = win.Portal.watersort.rules;
+          var start = game._state();
+          start.puzzle.solution.slice(0, 4).forEach(function (m) {
+            game._tap(m.from);
+            game._tap(m.to);
+          });
+          assert(game._state().moves.length > 0, 'no moves were made to undo');
+          game._startOver();
+          eq(game._state().board, start.board);
+          eq(game._state().moves.length, 0);
+        });
+      });
+    })
+    .then(function () {
+      return check('playing the solution by tapping wins, and the win is celebrated',
+        function () {
+          return withGamePage(function (win, doc) {
+            var game = win.Portal.watersort.game;
+            var R2 = win.Portal.watersort.rules;
+            var puzzle = game._state().puzzle;
+
+            puzzle.solution.forEach(function (m) {
+              game._tap(m.from);
+              game._tap(m.to);
+            });
+
+            var end = game._state();
+            eq(end.moves.length, puzzle.solution.length,
+              'tapping the solution did not record every move');
+            assert(R2.isSolved(end.board, puzzle.capacity),
+              'tapping the solution did not finish the puzzle');
+
+            var party = doc.querySelector('.celebrate');
+            assert(party, 'winning was not celebrated');
+            var buttons = [].map.call(party.querySelectorAll('button'), function (b) {
+              return b.textContent.trim();
+            });
+            eq(buttons, ['Play Again', 'Home'], 'the celebration offers the wrong way on');
+          });
+        });
+    })
+    .then(function () {
+      return check('nothing tappable is ever smaller than a thumb, at any difficulty',
+        function () {
+          // The iframe is his phone's width. 64px is the floor for every
+          // tappable thing in the portal; a ten-vial puzzle packed five across
+          // silently breaks it.
+          var kept = localStorage.getItem('portal.settings');
+          var chain = Promise.resolve();
+          ['gentle', 'easy', 'medium', 'hard'].forEach(function (diff) {
+            chain = chain.then(function () {
+              var s = Portal.state.settings();
+              s.watersortDifficulty = diff;
+              Portal.state.settings(s);
+              localStorage.removeItem('portal.water-sort.save');
+              return withGamePage(function (win, doc) {
+                var taps = doc.querySelectorAll('.vial-tap');
+                var controls = doc.querySelectorAll('.controls .btn');
+                [].concat([].slice.call(taps), [].slice.call(controls))
+                  .forEach(function (el) {
+                    var box = el.getBoundingClientRect();
+                    assert(box.width >= 64 && box.height >= 64,
+                      diff + ': a control is only ' + Math.round(box.width) + 'x' +
+                      Math.round(box.height) + 'px');
+                  });
+                assert(win.document.documentElement.scrollHeight <= win.innerHeight + 1,
+                  diff + ': the board does not fit the screen without scrolling');
+              });
+            });
+          });
+          return chain.then(function () {
+            if (kept === null) localStorage.removeItem('portal.settings');
+            else localStorage.setItem('portal.settings', kept);
+          });
+        });
+    })
+    .then(function () {
+      return check('every move is saved as it happens, so nothing is lost', function () {
+        return withGamePage(function (win) {
+          var game = win.Portal.watersort.game;
+          var start = game._state();
+          start.puzzle.solution.slice(0, 2).forEach(function (m) {
+            game._tap(m.from);
+            game._tap(m.to);
+          });
+          var live = game._state();
+          var onDisk = JSON.parse(localStorage.getItem('portal.water-sort.save'));
+          eq(onDisk.moves, live.moves, 'the saved moves do not match the game on screen');
+          eq(onDisk.puzzle.seed, live.puzzle.seed, 'the saved puzzle is a different puzzle');
+        });
+      });
+    })
+    .then(function () {
+      return check('restore any real saved game', function () {
+        if (savedGame === null) localStorage.removeItem('portal.water-sort.save');
+        else localStorage.setItem('portal.water-sort.save', savedGame);
+      });
+    });
+  });
+
   // ---------------------------------------------------------------- run
 
   (function run(i) {
