@@ -1,0 +1,86 @@
+/* Sudoku — the grid and the number pad.
+ *
+ * On a 360px screen a 9x9 grid gives squares around 36px across, below the
+ * 64px everything else in this portal clears. That is a deliberate trade: 9x9
+ * is the game he knows, and a grid he doesn't recognise would be a worse
+ * problem than a small square. It is safe to trade because tapping a square
+ * only selects it — the selection is plainly visible, and tapping again is
+ * free. The numbers, which are the part that actually writes something, get
+ * the full-size buttons.
+ *
+ * The gentler 4x4 and 6x6 grids give squares of 83px and 55px for when that
+ * trade stops being worth making.
+ */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(var(--n, 9), 1fr);
+  aspect-ratio: 1;
+  width: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  margin: 0 auto;
+  background: var(--surface);
+  border: 3px solid var(--ink);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.cell {
+  -webkit-appearance: none;
+  appearance: none;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-left: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--accent);
+  font: 600 clamp(18px, 6.2vw, 34px)/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  padding: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* The numbers the puzzle came with: darker, heavier, and plainly not his. */
+.cell.given {
+  color: var(--ink);
+  font-weight: 800;
+  background: #eef1f3;
+  cursor: default;
+}
+
+/* Where the boxes meet. */
+.cell.box-left { border-left: 3px solid var(--ink); }
+.cell.box-top { border-top: 3px solid var(--ink); }
+
+.cell.selected {
+  background: var(--accent);
+  color: #ffffff;
+  box-shadow: inset 0 0 0 3px var(--accent);
+}
+
+/* Shown only once the grid is full: these are the numbers that clash. */
+.cell.clash {
+  color: #c00000;
+  background: #fdeaea;
+}
+
+.cell.clash.selected {
+  background: #c00000;
+  color: #ffffff;
+}
+
+/* ------------------------------------------------------------ number pad */
+
+.pad {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(var(--pad-cols, 3), 1fr);
+  gap: 8px;
+  grid-auto-rows: minmax(64px, 78px);
+}
+
+.pad-key {
+  min-height: 0;             /* the row height is doing the work here */
+  font-size: 30px;
+  font-weight: 700;
+}

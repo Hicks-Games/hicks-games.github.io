@@ -53,6 +53,21 @@
         '<circle cx="9" cy="30" r="4.5"/><circle cx="31" cy="30" r="4.5"/>' +
         '</g>' +
         '</svg>'
+    },
+    {
+      id: 'sudoku',
+      label: 'Sudoku',
+      href: 'sudoku/',
+      icon:
+        '<svg viewBox="0 0 40 40" aria-hidden="true">' +
+        '<rect x="5" y="5" width="30" height="30" rx="2" fill="#fff" stroke="#22303c" stroke-width="2.5"/>' +
+        '<g stroke="#b3bec7" stroke-width="1.5">' +
+        '<path d="M15 5v30M25 5v30M5 15h30M5 25h30"/>' +
+        '</g>' +
+        '<g fill="#1b3a5c" font-family="system-ui,sans-serif" font-size="9" font-weight="700" text-anchor="middle">' +
+        '<text x="10" y="13.5">3</text><text x="30" y="23.5">7</text><text x="20" y="33.5">1</text>' +
+        '</g>' +
+        '</svg>'
     }
   ];
 
@@ -64,6 +79,9 @@
     button.className = 'btn game-button';
     button.type = 'button';
     button.innerHTML = game.icon + '<span>' + game.label + '</span>';
+    // Stated outright, because the sudoku icon has numbers drawn in it and
+    // they would otherwise be read out as part of the name.
+    button.setAttribute('aria-label', game.label);
     button.addEventListener('click', function () {
       window.location.href = game.href;
     });
