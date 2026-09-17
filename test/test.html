@@ -46,6 +46,9 @@
 <script src="../untangle/generator.js"></script>
 <script src="../sudoku/rules.js"></script>
 <script src="../sudoku/generator.js"></script>
+<script src="../words/wordlist.js"></script>
+<script src="../words/rules.js"></script>
+<script src="../words/generator.js"></script>
 <script>
 (function () {
   'use strict';
@@ -1479,6 +1482,373 @@
         else localStorage.setItem('portal.sudoku.save', savedGame);
         if (keptSettings === null) localStorage.removeItem('portal.settings');
         else localStorage.setItem('portal.settings', keptSettings);
+      });
+    });
+  });
+
+  // ------------------------------------------------------------ word game
+
+  var WdR = Portal.words.rules;
+  var WdG = Portal.words.generator;
+  var LIST = Portal.words.list;
+
+  suite('word game — the rules', function () {
+    return check('a word can only use each tile once', function () {
+      var tiles = WdR.counts('flowers');
+      assert(WdR.canSpell(WdR.counts('flower'), tiles), 'FLOWER comes out of FLOWERS');
+      assert(WdR.canSpell(WdR.counts('slow'), tiles), 'SLOW does too');
+      assert(!WdR.canSpell(WdR.counts('follow'), tiles),
+        'FOLLOW needs two Ls and there is only one');
+      assert(!WdR.canSpell(WdR.counts('flowered'), tiles), 'no D on the board');
+    })
+    .then(function () {
+      return check('the words a set of letters spells are found correctly', function () {
+        var words = ['at', 'cat', 'act', 'tack', 'cart', 'dog'];
+        var got = WdR.findableFrom(['c', 'a', 't'], words);
+        eq(got, ['at', 'cat', 'act'], 'should be everything CAT spells, and nothing else');
+      });
+    })
+    .then(function () {
+      return check('the words he has found are replayed from the move list', function () {
+        var findable = ['cat', 'act', 'at'];
+        eq(WdR.replay(findable, []), []);
+        eq(WdR.replay(findable, [{ word: 'cat' }, { word: 'at' }]), ['cat', 'at']);
+      });
+    })
+    .then(function () {
+      return check('a save naming a word this puzzle has not got is refused', function () {
+        eq(WdR.replay(['cat'], [{ word: 'dog' }]), null, 'a word not in this puzzle');
+        eq(WdR.replay(['cat'], [{ word: 'cat' }, { word: 'cat' }]), null,
+          'the same word twice');
+      });
+    })
+    .then(function () {
+      return check('he needs about two in five, never every last one', function () {
+        eq(WdR.target(20), 8);
+        eq(WdR.target(10), 4);
+        // Small puzzles still ask for a few, but never more than there are.
+        assert(WdR.target(5) <= 5, 'asked for more words than the puzzle holds');
+        assert(WdR.target(24) < 24, 'chasing the last obscure word is homework');
+      });
+    });
+  });
+
+  suite('word game — the dictionary', function () {
+    return check('every word is the right shape', function () {
+      assert(LIST.WORDS.length > 2000, 'suspiciously few words: ' + LIST.WORDS.length);
+      LIST.WORDS.forEach(function (w) {
+        assert(/^[a-z]+$/.test(w), 'not plain lowercase letters: ' + w);
+        assert(w.length >= LIST.MIN_LEN && w.length <= LIST.MAX_LEN,
+          'wrong length: ' + w);
+      });
+    })
+    .then(function () {
+      return check('nothing crude or unkind survived the filter', function () {
+        // Spot checks from each class the build script removes.
+        ['damn', 'hell', 'sexy', 'idiot', 'stupid', 'cancer', 'death', 'kill',
+         'mon', 'rom', 'faq', 'html', 'psi', 'kent'].forEach(function (w) {
+          eq(LIST.WORDS.indexOf(w), -1, 'should have been filtered out: ' + w);
+        });
+      });
+    })
+    .then(function () {
+      return check('ordinary words were kept', function () {
+        ['cat', 'dog', 'run', 'garden', 'flower', 'window', 'morning', 'kitchen']
+          .forEach(function (w) {
+            if (w.length > LIST.MAX_LEN) return;
+            assert(LIST.WORDS.indexOf(w) !== -1, 'a perfectly good word is missing: ' + w);
+          });
+      });
+    })
+    .then(function () {
+      return check('every letter set really does spell enough words', function () {
+        var t0 = performance.now();
+        assert(LIST.BASES.length > 200, 'too few letter sets: ' + LIST.BASES.length);
+        // Checking all of them is slow; a spread across the list is enough to
+        // catch a dictionary and a base list that have drifted apart.
+        var step = Math.floor(LIST.BASES.length / 60) || 1;
+        for (var i = 0; i < LIST.BASES.length; i += step) {
+          var base = LIST.BASES[i];
+          var findable = WdR.findableFrom(base.split(''), LIST.WORDS);
+          assert(findable.length >= 10 && findable.length <= 24,
+            base + ' spells ' + findable.length + ' words, outside 10-24');
+          assert(findable.indexOf(base) !== -1,
+            base + ' does not spell itself, which cannot be right');
+        }
+        note('letter sets sampled in ' + Math.round(performance.now() - t0) + 'ms');
+      });
+    });
+  });
+
+  suite('word game — every puzzle is playable', function () {
+    return check('puzzles come out the right size at every difficulty', function () {
+      ['gentle', 'easy', 'medium', 'hard'].forEach(function (diff) {
+        var preset = WdG.PRESETS[diff];
+        for (var i = 0; i < 12; i++) {
+          var p = WdG.generate({ difficulty: diff, seed: i + 1 });
+          eq(p.letters.length, preset.letters, diff + ': wrong number of tiles');
+          assert(p.findable.length >= 8,
+            diff + ': only ' + p.findable.length + ' words to find');
+          assert(p.target >= 3 && p.target <= p.findable.length,
+            diff + ': the goal is not reachable');
+        }
+      });
+    })
+    .then(function () {
+      return check('every word in a puzzle can actually be spelled from its tiles',
+        function () {
+          // The whole promise of this game: no slot he cannot fill.
+          for (var i = 0; i < 40; i++) {
+            var p = WdG.generate({ difficulty: 'medium', seed: i + 500 });
+            p.findable.forEach(function (word) {
+              assert(WdR.canSpell(WdR.counts(word), WdR.counts(p.letters.join(''))),
+                'puzzle ' + p.letters.join('') + ' lists ' + word +
+                ' but cannot spell it');
+            });
+          }
+        });
+    })
+    .then(function () {
+      return check('the tiles are shuffled, not handed over as the answer', function () {
+        // If the tiles spelled their own word in order, the longest word would
+        // be sitting there in plain sight.
+        var inOrder = 0;
+        for (var i = 0; i < 40; i++) {
+          var p = WdG.generate({ difficulty: 'easy', seed: i + 900 });
+          var longest = p.findable.filter(function (w) {
+            return w.length === p.letters.length;
+          })[0];
+          if (longest && longest === p.letters.join('')) inOrder++;
+        }
+        assert(inOrder <= 2, inOrder + ' of 40 puzzles gave the answer away');
+      });
+    })
+    .then(function () {
+      return check('the same seed always produces the same puzzle', function () {
+        var a = WdG.generate({ difficulty: 'easy', seed: 4242 });
+        var b = WdG.generate({ difficulty: 'easy', seed: 4242 });
+        eq(a.letters, b.letters);
+        eq(a.findable, b.findable);
+      });
+    });
+  });
+
+  suite('word game — playing the real game screen', function () {
+    var savedGame, keptSettings, keptProgress;
+
+    function withWords(fn) {
+      var frame = document.createElement('iframe');
+      frame.style.cssText = 'width:360px;height:600px;border:1px solid #2d3742;';
+      document.body.appendChild(frame);
+      frame.src = '../words/';
+      return new Promise(function (resolve, reject) {
+        frame.addEventListener('load', function () {
+          setTimeout(function () {
+            try {
+              var out = fn(frame.contentWindow, frame.contentDocument);
+              if (out && typeof out.then === 'function') {
+                return out.then(
+                  function (v) { frame.remove(); resolve(v); },
+                  function (e) { frame.remove(); reject(e); }
+                );
+              }
+              frame.remove();
+              resolve(out);
+            } catch (err) {
+              frame.remove();
+              reject(err);
+            }
+          }, 250);
+        });
+      });
+    }
+
+    return check('set aside any real saved game', function () {
+      savedGame = localStorage.getItem('portal.words.save');
+      keptSettings = localStorage.getItem('portal.settings');
+      keptProgress = Portal.state.progress('words');
+      localStorage.removeItem('portal.words.save');
+    })
+    .then(function () {
+      return check('a slot for every word and a tile for every letter', function () {
+        return withWords(function (win, doc) {
+          var g = win.Portal.words.game._state();
+          eq(doc.querySelectorAll('.slot').length, g.puzzle.findable.length);
+          eq(doc.querySelectorAll('.tile').length, g.puzzle.letters.length);
+          eq(doc.querySelectorAll('.slot.found').length, 0, 'started with words found');
+          assert(/^Level \d+/.test(doc.getElementById('level').textContent),
+            'the level is not on screen');
+        });
+      });
+    })
+    .then(function () {
+      return check('an unfound slot shows a dash per letter, so he knows what to look for',
+        function () {
+          return withWords(function (win, doc) {
+            var g = win.Portal.words.game._state();
+            var slots = doc.querySelectorAll('.slot');
+            g.puzzle.findable.forEach(function (word, i) {
+              eq(slots[i].textContent.length, word.length,
+                'the slot for ' + word + ' shows the wrong number of dashes');
+            });
+          });
+        });
+    })
+    .then(function () {
+      return check('tiles and Enter are a full-sized target, and the screen fits',
+        function () {
+          return withWords(function (win, doc) {
+            [].forEach.call(doc.querySelectorAll('.tile'), function (t) {
+              var box = t.getBoundingClientRect();
+              assert(box.width >= 64 && box.height >= 64,
+                'a tile is only ' + Math.round(box.width) + 'x' +
+                Math.round(box.height) + 'px');
+            });
+            var enter = doc.getElementById('enter').getBoundingClientRect();
+            assert(enter.width >= 64 && enter.height >= 64, 'Enter is too small');
+            assert(win.document.documentElement.scrollHeight <= win.innerHeight + 1,
+              'the screen does not fit without scrolling');
+            var slots = doc.querySelector('.slots');
+            assert(slots.scrollHeight <= slots.clientHeight + 1,
+              'the slots do not all fit on screen');
+          });
+        });
+    })
+    .then(function () {
+      return check('spelling a word and entering it fills its slot', function () {
+        return withWords(function (win, doc) {
+          var game = win.Portal.words.game;
+          var word = game._state().puzzle.findable[0];
+
+          assert(game._spell(word), 'the tiles could not spell their own word');
+          eq(game._state().current, word, 'the wrong letters were picked up');
+          eq(doc.querySelectorAll('.tile.in-use').length, word.length,
+            'the tiles in use are not marked');
+
+          game._enter();
+          eq(game._state().found, [word]);
+          eq(doc.querySelectorAll('.slot.found').length, 1);
+          eq(doc.querySelectorAll('.tile.in-use').length, 0,
+            'the tiles were not given back');
+          eq(game._state().current, '', 'the spelling area was not cleared');
+        });
+      });
+    })
+    .then(function () {
+      return check('a word that is not one, or one he already has, is quietly refused',
+        function () {
+          return withWords(function (win, doc) {
+            var game = win.Portal.words.game;
+            var word = game._state().puzzle.findable[0];
+
+            game._spell(word);
+            game._enter();                       // found once
+
+            game._spell(word);
+            game._enter();                       // and again
+            eq(game._state().found.length, 1, 'the same word was counted twice');
+            assert(doc.getElementById('current').classList.contains('rejected'),
+              'nothing on screen acknowledged the refusal');
+            eq(doc.querySelectorAll('.celebrate').length, 0,
+              'a refusal must not put anything in front of him');
+          });
+        });
+    })
+    .then(function () {
+      return check('undo takes back a letter while he is spelling, a word when he is not',
+        function () {
+          return withWords(function (win) {
+            var game = win.Portal.words.game;
+            var word = game._state().puzzle.findable[0];
+
+            game._spell(word);
+            game._undo();
+            eq(game._state().current, word.slice(0, -1), 'undo did not take a letter back');
+
+            game._undo();  // and another
+            eq(game._state().current, word.slice(0, -2));
+
+            // With nothing part-spelled, undo un-finds the last word instead.
+            game._startOver();
+            game._spell(word);
+            game._enter();
+            eq(game._state().found.length, 1);
+            game._undo();
+            eq(game._state().found.length, 0, 'undo did not take the word back');
+            eq(game._state().moves.length, 0);
+          });
+        });
+    })
+    .then(function () {
+      return check('undo with nothing at all to undo does nothing', function () {
+        return withWords(function (win, doc) {
+          var game = win.Portal.words.game;
+          game._undo();
+          game._undo();
+          eq(game._state().found.length, 0);
+          eq(game._state().current, '');
+          eq(doc.querySelectorAll('.celebrate').length, 0);
+        });
+      });
+    })
+    .then(function () {
+      return check('two in five earns a celebration that offers to carry on', function () {
+        return withWords(function (win, doc) {
+          var game = win.Portal.words.game;
+          var p = game._state().puzzle;
+          for (var i = 0; i < p.target; i++) {
+            game._spell(p.findable[i]);
+            game._enter();
+          }
+          return new Promise(function (resolve, reject) {
+            setTimeout(function () {
+              try {
+                var party = doc.querySelector('.celebrate');
+                assert(party, 'reaching the goal was not celebrated');
+                eq(doc.querySelectorAll('.celebrate').length, 1,
+                  'more than one celebration is on screen');
+                var buttons = [].map.call(party.querySelectorAll('button'), function (b) {
+                  return b.textContent.trim();
+                });
+                eq(buttons, ['Keep Going', 'New Letters', 'Home'],
+                  'the celebration does not offer to carry on');
+
+                // Carrying on must leave his words exactly where they were.
+                party.querySelector('button').click();
+                setTimeout(function () {
+                  try {
+                    eq(doc.querySelectorAll('.celebrate').length, 0,
+                      'the celebration did not go away');
+                    eq(game._state().found.length, p.target,
+                      'carrying on lost the words he had found');
+                    resolve();
+                  } catch (e) { reject(e); }
+                }, 120);
+              } catch (err) { reject(err); }
+            }, 600);
+          });
+        });
+      });
+    })
+    .then(function () {
+      return check('every word is saved as it is found', function () {
+        return withWords(function (win) {
+          var game = win.Portal.words.game;
+          var word = game._state().puzzle.findable[0];
+          game._spell(word);
+          game._enter();
+          var onDisk = JSON.parse(localStorage.getItem('portal.words.save'));
+          eq(onDisk.moves, game._state().moves, 'the save does not match the board');
+        });
+      });
+    })
+    .then(function () {
+      return check('restore any real saved game', function () {
+        if (savedGame === null) localStorage.removeItem('portal.words.save');
+        else localStorage.setItem('portal.words.save', savedGame);
+        if (keptSettings === null) localStorage.removeItem('portal.settings');
+        else localStorage.setItem('portal.settings', keptSettings);
+        Portal.state.progress('words', keptProgress);
       });
     });
   });

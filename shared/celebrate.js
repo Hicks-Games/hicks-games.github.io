@@ -117,6 +117,11 @@
   function show(options) {
     options = options || {};
 
+    /* One at a time. Two of these stacked would leave him tapping a button
+     * and finding another screen underneath it. */
+    var already = document.querySelectorAll('.celebrate');
+    for (var i = 0; i < already.length; i++) already[i].remove();
+
     var wrap = document.createElement('div');
     wrap.className = 'celebrate';
 
@@ -128,8 +133,23 @@
     text.textContent = options.message || 'You did it!';
     wrap.appendChild(text);
 
+    /* In the word game he is congratulated before the board is exhausted, so
+     * there is a third way on: back to the puzzle he was enjoying. When it is
+     * offered it is the big button, because carrying on is the likelier wish. */
+    if (options.keepGoing) {
+      var carryOn = document.createElement('button');
+      carryOn.className = 'btn btn-primary';
+      carryOn.textContent = 'Keep Going';
+      carryOn.addEventListener('click', function () {
+        stop();
+        wrap.remove();
+        options.keepGoing();
+      });
+      wrap.appendChild(carryOn);
+    }
+
     var again = document.createElement('button');
-    again.className = 'btn btn-primary';
+    again.className = options.keepGoing ? 'btn' : 'btn btn-primary';
     again.textContent = options.againLabel || 'Play Again';
     again.addEventListener('click', function () {
       stop();
@@ -158,5 +178,32 @@
     };
   }
 
-  Portal.celebrate = { show: show, _chime: chime };
+  /* A single soft note, for a small good thing — one word found out of many.
+   * Deliberately nothing like the win chime: this is a nod, not a fanfare. */
+  function blip() {
+    var settings = Portal.state.settings();
+    if (settings.sound === false) return;
+    try {
+      var Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return;
+      var ctx = new Ctx();
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 880;
+      var at = ctx.currentTime;
+      gain.gain.setValueAtTime(0, at);
+      gain.gain.linearRampToValueAtTime(0.16, at + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.22);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(at);
+      osc.stop(at + 0.25);
+      setTimeout(function () {
+        try { ctx.close(); } catch (err) { /* already gone */ }
+      }, 600);
+    } catch (err) { /* silence is fine */ }
+  }
+
+  Portal.celebrate = { show: show, blip: blip, _chime: chime };
 })(window.Portal = window.Portal || {});

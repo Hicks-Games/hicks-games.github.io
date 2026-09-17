@@ -6,6 +6,10 @@ package-lock.json
 dist/
 build/
 
+# Word lists downloaded by tools/build-wordlist.js. The built result
+# (words/wordlist.js) is committed; these raw sources are not.
+.build/
+
 # OS / editor noise
 Thumbs.db
 desktop.ini

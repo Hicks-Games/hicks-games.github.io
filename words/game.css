@@ -1,0 +1,135 @@
+/* Word game — slots, the word being spelled, and the letter tiles. */
+
+/* A slot per word to find. Dashes until found, so he can see that a
+ * four-letter word is waiting rather than having to guess that one exists. */
+.slots {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(68px, 1fr));
+  /* Centred rather than pinned to the top, so a puzzle with few words to find
+   * doesn't leave a bare stripe across the middle of the screen. */
+  align-content: center;
+  gap: 6px 8px;
+  overflow: hidden;
+}
+
+.slot {
+  font: 700 20px/30px ui-monospace, "Cascadia Mono", Consolas, monospace;
+  letter-spacing: 1px;
+  text-align: center;
+  color: #a9b6c0;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.slot.found {
+  color: var(--accent-ink);
+  background: var(--accent);
+  letter-spacing: 0.5px;
+}
+
+.slot.just-found { animation: word-lands 420ms ease-out; }
+
+@keyframes word-lands {
+  0%   { transform: scale(0.7); background: #009e73; }
+  60%  { transform: scale(1.08); background: #009e73; }
+  100% { transform: scale(1); }
+}
+
+/* ------------------------------------------------- the word being spelled */
+
+.current-row {
+  flex: none;
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.current {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 68px;
+  padding: 0 10px;
+  background: var(--surface);
+  border: 2px dashed var(--line);
+  border-radius: var(--radius);
+  font: 800 30px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: 3px;
+  color: var(--ink);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* Not a word, or one he already has. A brief flinch and it clears itself —
+ * nothing to read, nothing to dismiss. */
+.current.rejected {
+  animation: flinch 400ms ease;
+  border-color: #d55e00;
+  color: #d55e00;
+}
+
+@keyframes flinch {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-7px); }
+  45% { transform: translateX(6px); }
+  70% { transform: translateX(-3px); }
+}
+
+#enter {
+  flex: none;
+  width: 118px;
+  min-height: 68px;
+  font-size: 22px;
+}
+
+/* Quietly firmer when what he has spelled is a word he hasn't found yet.
+ * An encouragement, not a gate: Enter is always there and always works. */
+#enter.ready {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+/* --------------------------------------------------------- letter tiles */
+
+.tiles {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(var(--tile-cols, 4), 1fr);
+  gap: 8px;
+  grid-auto-rows: 66px;
+}
+
+.tile {
+  -webkit-appearance: none;
+  appearance: none;
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: var(--radius);
+  font: 800 30px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--ink);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 90ms ease, opacity 120ms ease;
+}
+
+.tile:active { transform: scale(0.94); }
+
+/* In use in the word he is spelling. Still the same size and still in the
+ * same place — it just isn't available. */
+.tile.in-use {
+  opacity: 0.32;
+  background: #e6eaed;
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slot.just-found, .current.rejected { animation: none; }
+  .tile { transition: none; }
+}
