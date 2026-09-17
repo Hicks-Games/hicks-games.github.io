@@ -80,6 +80,20 @@
     });
   }
 
+  /* A distinct colour per string.
+   *
+   * Stepping round the colour wheel by the golden angle spreads any number of
+   * strings as far apart in hue as they can go — the next one is never near
+   * the last, however many there are, so no hand-written palette to run out
+   * of. Lightness alternates as well, so two strings are told apart by more
+   * than hue alone. They stay dark enough to read against the paper
+   * background, and against each other where they cross. */
+  function stringColour(index) {
+    var hue = (index * 137.508) % 360;
+    var light = index % 2 ? 45 : 34;
+    return 'hsl(' + hue.toFixed(1) + ', 74%, ' + light + '%)';
+  }
+
   function el(name, attrs) {
     var node = document.createElementNS(SVG_NS, name);
     Object.keys(attrs).forEach(function (k) { node.setAttribute(k, attrs[k]); });
@@ -100,10 +114,15 @@
     // Strings first, so pegs sit on top of them.
     puzzle.edges.forEach(function (edge, index) {
       var a = points[edge[0]], b = points[edge[1]];
-      svgEl.appendChild(el('line', {
+      var line = el('line', {
         x1: a.x, y1: a.y, x2: b.x, y2: b.y,
         class: 'string ' + (bad[index] ? 'tangled' : 'clear')
-      }));
+      });
+      // Its own colour while it is tangled, so he can follow one string
+      // through the knot with his eye. Once it is clear it gives up its
+      // colour and goes quiet, and the board drains as he sorts it out.
+      if (bad[index]) line.style.stroke = stringColour(index);
+      svgEl.appendChild(line);
     });
 
     // Empty holes, so it is obvious where a peg may go.

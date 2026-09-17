@@ -9,15 +9,18 @@
   touch-action: manipulation;
 }
 
-/* A string that crosses another is loud. A string that crosses nothing steps
- * back out of the way. Sorting the board out visibly drains the red off it,
- * which is the only progress signal the game gives — and the only one it
- * needs. */
+/* A string that crosses another keeps its own colour, so it can be followed
+ * through the knot. A string that crosses nothing gives its colour up and
+ * steps back out of the way. Sorting the board out visibly drains the colour
+ * off it, which is the only progress signal the game gives — and the only one
+ * it needs. */
 .string {
   stroke-linecap: round;
   transition: stroke 180ms ease, stroke-width 180ms ease;
 }
 
+/* The colour itself is set per string by the game; this is only the weight,
+ * and a fallback if anything ever fails to set one. */
 .string.tangled {
   stroke: #d55e00;
   stroke-width: 7;
