@@ -183,11 +183,25 @@
       : options.seed >>> 0;
     var random = rng(seed);
 
+    /* If the board is too small for the pegs asked for — a short screen, or
+     * the address bar taking a slice — quietly play with fewer rather than
+     * failing. A slightly smaller puzzle is a puzzle; an error screen is not.
+     */
+    for (var count = pegs; count >= 4; count--) {
+      var built = build(count, spares, width, height, random, options);
+      if (built) return built;
+    }
+
+    throw new Error('untangle: could not build a board for ' + pegs + ' pegs');
+  }
+
+  function build(pegs, spares, width, height, random, options) {
+    var preset = PRESETS[options.difficulty] || PRESETS.easy;
     var holeCount = pegs + spares;
 
     for (var attempt = 0; attempt < 120; attempt++) {
       var points = punchHoles(holeCount, width, height, random);
-      if (!points) break;
+      if (!points) return null;      // no room at this size; caller tries fewer
 
       // Pegs live in the first `pegs` holes in the solved picture; the spares
       // are the empty places he has to work with.
@@ -225,14 +239,14 @@
           pegs: pegs,
           spares: spares,
           tangledAtStart: mess,
-          seed: seed,
+          seed: options.seed === undefined ? 0 : options.seed >>> 0,
           difficulty: options.difficulty || 'easy',
           name: preset.name
         };
       }
     }
 
-    throw new Error('untangle: could not build a board for ' + pegs + ' pegs');
+    return null;
   }
 
   Portal.untangle.generator = {

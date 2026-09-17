@@ -12,13 +12,17 @@
  * trade stops being worth making.
  */
 
+/* The grid is sized in script to the largest square that fits the space
+ * left over, because a square that has to fit two different limits at once
+ * is more than CSS will reliably work out on its own — get it wrong and the
+ * bottom rows render outside the box and are quietly clipped, which is
+ * exactly what happened on the real phone. aspect-ratio stays as a sane
+ * starting point for the first paint. */
 .grid {
   display: grid;
   grid-template-columns: repeat(var(--n, 9), 1fr);
   aspect-ratio: 1;
   width: 100%;
-  max-width: 100%;
-  max-height: 100%;
   margin: 0 auto;
   background: var(--surface);
   border: 3px solid var(--ink);
@@ -71,12 +75,20 @@
 
 /* ------------------------------------------------------------ number pad */
 
+/* Two rows, always. Nine number keys stacked three-by-three ate more of the
+ * screen than the puzzle did, and the grid is the game. Five across keeps
+ * them 60px wide — narrower than the 64px floor, but tall enough, well
+ * separated, and each one plainly labelled with a single big digit. The room
+ * that buys goes to the grid, where he has to read nine rows of numbers. */
 .pad {
   flex: none;
   display: grid;
-  grid-template-columns: repeat(var(--pad-cols, 3), 1fr);
+  grid-template-columns: repeat(var(--pad-cols, 5), 1fr);
   gap: 8px;
-  grid-auto-rows: minmax(64px, 78px);
+  /* A settled height rather than "as tall as it can be". Letting the keys grow
+   * to fill spare room means that on a short screen they take it from the
+   * board, and the board is the game. */
+  grid-auto-rows: 70px;
 }
 
 .pad-key {

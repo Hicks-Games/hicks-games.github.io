@@ -40,8 +40,33 @@
     Portal.state.save(GAME, puzzle, moves);
   }
 
+  /* How wide a vial would be if there were this many of them. */
+  function vialWidthFor(count) {
+    var cols = columnsFor(count);
+    var rows = Math.ceil(count / cols);
+    var stage = boardEl.parentElement.getBoundingClientRect();
+    var byWidth = (stage.width - (cols - 1) * 8) / cols - 4;
+    var byHeight = ((stage.height - (rows - 1) * 10) / rows - 20) / 2.05;
+    return Math.min(92, byWidth, byHeight);
+  }
+
+  /* Nothing in this portal is smaller than 64px across, and that has to hold
+   * on the phone he actually owns rather than on a generous screen. If the
+   * room isn't there for the number of colours asked for, play with fewer.
+   * A slightly easier puzzle he can hit beats a harder one he can't. */
+  function coloursThatFit(wanted, empties) {
+    for (var colours = wanted; colours > 3; colours--) {
+      if (vialWidthFor(colours + empties) >= 64) return colours;
+    }
+    return 3;
+  }
+
   function newPuzzle() {
-    puzzle = G.generate({ difficulty: difficulty() });
+    var preset = G.PRESETS[difficulty()] || G.PRESETS.easy;
+    puzzle = G.generate({
+      difficulty: difficulty(),
+      colours: coloursThatFit(preset.colours, preset.empties)
+    });
     moves = [];
     board = R.clone(puzzle.board);
     selected = null;
@@ -87,10 +112,31 @@
 
   /* arriving: {to, count} marks the liquid that just landed, so it can rise
    * into place instead of appearing from nowhere. */
+  /* Work out how big a vial can be so that every one of them fits the space
+   * available — across AND down. Left to the stylesheet, a tall puzzle on a
+   * short screen simply drew its last row underneath the buttons, where he
+   * would never have found it. */
+  function sizeVials(cols, rows) {
+    var stage = boardEl.parentElement.getBoundingClientRect();
+    var COL_GAP = 8, ROW_GAP = 10, TAP_PAD_X = 4, TAP_PAD_Y = 20, RATIO = 2.05;
+
+    var byWidth = (stage.width - (cols - 1) * COL_GAP) / cols - TAP_PAD_X;
+    var byHeight =
+      ((stage.height - (rows - 1) * ROW_GAP) / rows - TAP_PAD_Y) / RATIO;
+
+    // Floor of 60 so a stray tiny window never produces a board of slivers;
+    // the puzzle itself is sized by coloursThatFit so this rarely bites.
+    var width = Math.max(60, Math.floor(Math.min(92, byWidth, byHeight)));
+    boardEl.style.setProperty('--vial-w', width + 'px');
+    boardEl.style.setProperty('--cell-w', (width + TAP_PAD_X) + 'px');
+  }
+
   function render(arriving) {
     var showSymbols = settings().symbols === true;
     var tracked = seenUnits();
-    boardEl.style.setProperty('--cols', columnsFor(board.length));
+    var cols = columnsFor(board.length);
+    boardEl.style.setProperty('--cols', cols);
+    sizeVials(cols, Math.ceil(board.length / cols));
     boardEl.textContent = '';
 
     board.forEach(function (vial, index) {
@@ -242,6 +288,10 @@
 
     if (!restore()) newPuzzle();
     render();
+
+    // The address bar sliding away, or the phone turning, changes how much
+    // room there is. Re-fit rather than let a row hide behind the buttons.
+    window.addEventListener('resize', function () { render(); });
   }
 
   if (document.readyState === 'loading') {

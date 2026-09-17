@@ -552,7 +552,7 @@
    * called a convenient internal function gets caught here. */
   function withGamePage(fn) {
     var frame = document.createElement('iframe');
-    frame.style.cssText = 'width:360px;height:760px;border:1px solid #2d3742;';
+    frame.style.cssText = 'width:360px;height:600px;border:1px solid #2d3742;';
     document.body.appendChild(frame);
     frame.src = '../water-sort/';
 
@@ -781,6 +781,42 @@
         });
     })
     .then(function () {
+      return check('every vial is fully visible, none hiding behind the buttons',
+        function () {
+          // Same failure as the sudoku board, in a different shape: a tall
+          // puzzle on a short screen drew its last row underneath the
+          // controls, where he would never have found it.
+          var kept = localStorage.getItem('portal.settings');
+          var chain = Promise.resolve();
+          ['gentle', 'easy', 'medium', 'hard', 'mystery'].forEach(function (diff) {
+            chain = chain.then(function () {
+              var s = Portal.state.settings();
+              s.watersortDifficulty = diff;
+              Portal.state.settings(s);
+              localStorage.removeItem('portal.water-sort.save');
+              return withGamePage(function (win, doc) {
+                var stage = doc.querySelector('.stage').getBoundingClientRect();
+                var controls = doc.querySelector('.controls').getBoundingClientRect();
+                var taps = doc.querySelectorAll('.vial-tap');
+                assert(taps.length > 0, diff + ': no vials drawn at all');
+                [].forEach.call(taps, function (tap) {
+                  var box = tap.getBoundingClientRect();
+                  assert(box.bottom <= controls.top + 1,
+                    diff + ': a vial is hidden behind the buttons');
+                  assert(box.bottom <= stage.bottom + 1 && box.top >= stage.top - 1,
+                    diff + ': a vial sits outside the space it has');
+                });
+              });
+            });
+          });
+          return chain.then(function () {
+            if (kept === null) localStorage.removeItem('portal.settings');
+            else localStorage.setItem('portal.settings', kept);
+            localStorage.removeItem('portal.water-sort.save');
+          });
+        });
+    })
+    .then(function () {
       return check('every move is saved as it happens, so nothing is lost', function () {
         return withGamePage(function (win) {
           var game = win.Portal.watersort.game;
@@ -941,7 +977,7 @@
 
     function withUntangle(fn) {
       var frame = document.createElement('iframe');
-      frame.style.cssText = 'width:360px;height:760px;border:1px solid #2d3742;';
+      frame.style.cssText = 'width:360px;height:600px;border:1px solid #2d3742;';
       document.body.appendChild(frame);
       frame.src = '../untangle/';
       return new Promise(function (resolve, reject) {
@@ -1235,7 +1271,7 @@
 
     function withSudoku(fn) {
       var frame = document.createElement('iframe');
-      frame.style.cssText = 'width:360px;height:760px;border:1px solid #2d3742;';
+      frame.style.cssText = 'width:360px;height:600px;border:1px solid #2d3742;';
       document.body.appendChild(frame);
       frame.src = '../sudoku/';
       return new Promise(function (resolve, reject) {
@@ -1293,6 +1329,47 @@
             'the screen does not fit without scrolling');
         });
       });
+    })
+    .then(function () {
+      return check('the whole board is visible, with no rows cut off the bottom',
+        function () {
+          // The bug this is here for: the grid was told to be as wide as the
+          // screen and no taller than the space left, which is two rules a
+          // square cannot obey at once. It kept the width, and the last two
+          // rows were drawn outside the box and clipped — on the phone, not on
+          // the generous screen it was designed against. The page itself never
+          // overflowed, so nothing else here would have noticed.
+          var kept = localStorage.getItem('portal.settings');
+          var chain = Promise.resolve();
+          ['gentle', 'easy', 'classic', 'hard'].forEach(function (diff) {
+            chain = chain.then(function () {
+              var s = Portal.state.settings();
+              s.sudokuDifficulty = diff;
+              Portal.state.settings(s);
+              localStorage.removeItem('portal.sudoku.save');
+              return withSudoku(function (win, doc) {
+                var grid = doc.querySelector('.grid').getBoundingClientRect();
+                var cells = doc.querySelectorAll('.cell');
+                [].forEach.call(cells, function (cell) {
+                  var box = cell.getBoundingClientRect();
+                  assert(box.bottom <= grid.bottom + 1 && box.right <= grid.right + 1,
+                    diff + ': a square is drawn outside the board and cut off');
+                });
+                assert(Math.abs(grid.width - grid.height) <= 1,
+                  diff + ': the board is not square (' +
+                  Math.round(grid.width) + 'x' + Math.round(grid.height) + ')');
+                var stage = doc.getElementById('stage').getBoundingClientRect();
+                assert(grid.bottom <= stage.bottom + 1,
+                  diff + ': the board hangs below the space it has');
+              });
+            });
+          });
+          return chain.then(function () {
+            if (kept === null) localStorage.removeItem('portal.settings');
+            else localStorage.setItem('portal.settings', kept);
+            localStorage.removeItem('portal.sudoku.save');
+          });
+        });
     })
     .then(function () {
       return check("the puzzle's own numbers cannot be picked or changed", function () {

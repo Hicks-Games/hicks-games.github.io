@@ -22,7 +22,7 @@
   var grid = null;      // derived: replay(puzzle.givens, moves)
   var selected = null;  // index of the square he has tapped, or null
 
-  var gridEl, padEl;
+  var gridEl, padEl, stageEl;
 
   function settings() { return Portal.state.settings(); }
 
@@ -103,11 +103,28 @@
 
     renderPad();
     paintLevel();
+    sizeGrid();
+  }
+
+  /* The largest square that fits what is left after the header, the number
+   * keys and the controls have taken their share. Worked out here rather than
+   * left to CSS: a box that has to satisfy a width limit and a height limit
+   * and stay square is where stylesheets quietly give up and let the last
+   * rows spill out of the box, which is what cut the bottom off the board on
+   * the real phone. */
+  function sizeGrid() {
+    var box = stageEl.getBoundingClientRect();
+    var size = Math.max(150, Math.floor(Math.min(box.width, box.height)));
+    gridEl.style.width = size + 'px';
+    gridEl.style.height = size + 'px';
   }
 
   function renderPad() {
     var n = puzzle.n;
-    padEl.style.setProperty('--pad-cols', n <= 4 ? 2 : 3);
+    // Always two rows: five across for the full game, fewer for the smaller
+    // grids, so the keys stay as wide as they can without stealing the board's
+    // height.
+    padEl.style.setProperty('--pad-cols', Math.ceil(n / 2));
     padEl.textContent = '';
 
     for (var v = 1; v <= n; v++) {
@@ -195,12 +212,17 @@
     Portal.shell.start({ game: GAME });
     gridEl = document.getElementById('grid');
     padEl = document.getElementById('pad');
+    stageEl = document.getElementById('stage');
 
     document.getElementById('undo').addEventListener('click', undo);
     document.getElementById('restart').addEventListener('click', startOver);
 
     if (!restore()) newPuzzle();
     render();
+
+    // The address bar sliding away, or the phone turning, changes how much
+    // room there is. Re-fit rather than clip.
+    window.addEventListener('resize', sizeGrid);
   }
 
   if (document.readyState === 'loading') {

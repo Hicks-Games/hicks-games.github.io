@@ -45,7 +45,12 @@
 
 html, body {
   margin: 0;
+  /* 100% of what, exactly: on a real phone Chrome's address bar takes a
+   * slice of the screen, so the page gets less height than the handset's
+   * spec sheet suggests. dvh is the height actually available right now.
+   * The plain percentage stays as a fallback for anything that predates it. */
   height: 100%;
+  height: 100dvh;
   overflow: hidden;              /* nothing in the portal ever scrolls */
   overscroll-behavior: none;     /* no pull-to-refresh */
   background: var(--bg);

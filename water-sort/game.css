@@ -5,12 +5,15 @@
  * it fills the width it needs.
  */
 
+/* Column width comes from the game, which knows how much room there is in
+ * both directions. The grid is centred rather than stretched so the vials
+ * stay a hand-sized cluster instead of drifting to the corners. */
 .board {
   display: grid;
-  grid-template-columns: repeat(var(--cols, 3), 1fr);
+  grid-template-columns: repeat(var(--cols, 3), var(--cell-w, 82px));
+  justify-content: center;
   gap: 10px 8px;
-  width: 100%;
-  max-width: 340px;
+  max-width: 100%;
 }
 
 /* The tappable area is the whole cell, not just the glass — a shaky tap that
@@ -30,9 +33,9 @@
 }
 
 .vial {
-  width: 100%;
-  max-width: 92px;                  /* as large as the screen allows: he is
-                                       reading these across a room, not a desk */
+  /* As large as the screen allows, capped at 92px by the game: he is reading
+   * these across a room, not a desk. */
+  width: var(--vial-w, 78px);
   aspect-ratio: 1 / 2.05;
   background: var(--surface);
   border: 3px solid #b3bec7;
